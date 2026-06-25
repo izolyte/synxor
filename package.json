@@ -1,0 +1,8 @@
+{
+  "name": "synxor",
+  "private": true,
+  "scripts": {
+    "typecheck": "pnpm -r exec tsc --noEmit",
+    "lint": "pnpm -r run lint"
+  }
+}
