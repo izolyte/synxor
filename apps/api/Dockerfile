@@ -1,27 +1,22 @@
 FROM node:24-alpine AS base
 RUN corepack enable && corepack prepare pnpm@10.24.0 --activate
 
-FROM base AS deps
-WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
-
-FROM base AS prod-deps
-WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
-
 FROM base AS build
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm build
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter api build
+
+FROM base AS deploy
+WORKDIR /app
+COPY --from=build /app .
+RUN pnpm --filter api --prod deploy --legacy /deploy
 
 FROM node:24-alpine AS prod
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
-COPY --from=build /app/dist ./dist
-COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=deploy /deploy/dist ./dist
+COPY --from=deploy /deploy/node_modules ./node_modules
 RUN chown -R appuser:appgroup /app
 USER appuser
 ENV NODE_ENV=production
