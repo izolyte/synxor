@@ -3,8 +3,10 @@ RUN corepack enable && corepack prepare pnpm@10.24.0 --activate
 
 FROM base AS build
 WORKDIR /app
-COPY . .
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/api/package.json ./apps/api/
 RUN pnpm install --frozen-lockfile
+COPY . .
 RUN pnpm --filter api build
 
 FROM base AS deploy
