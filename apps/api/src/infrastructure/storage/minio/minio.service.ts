@@ -1,0 +1,80 @@
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Client } from 'minio';
+import type { Readable } from 'stream';
+
+function isPermanentError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return ['AccessDenied', 'InvalidAccessKeyId', 'SignatureDoesNotMatch'].includes(code ?? '');
+}
+
+@Injectable()
+export class MinioService implements OnModuleInit {
+  private readonly logger = new Logger(MinioService.name);
+  private readonly client: Client;
+  private readonly bucket: string;
+
+  constructor() {
+    const accessKey = process.env.MINIO_ROOT_USER;
+    const secretKey = process.env.MINIO_ROOT_PASSWORD;
+
+    if (!accessKey) throw new Error('MINIO_ROOT_USER is required');
+    if (!secretKey) throw new Error('MINIO_ROOT_PASSWORD is required');
+
+    const endpoint = process.env.MINIO_ENDPOINT || 'localhost';
+    const portRaw = process.env.MINIO_PORT || '9000';
+    const port = parseInt(portRaw, 10);
+
+    if (isNaN(port)) {
+      throw new Error(`MINIO_PORT must be a number, got: "${process.env.MINIO_PORT}"`);
+    }
+
+    this.client = new Client({
+      endPoint: endpoint,
+      port,
+      useSSL: process.env.MINIO_USE_SSL === 'true',
+      accessKey,
+      secretKey,
+    });
+    this.bucket = process.env.MINIO_BUCKET ?? 'transfers';
+  }
+
+  async onModuleInit(): Promise<void> {
+    const maxRetries = 5;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const exists = await this.client.bucketExists(this.bucket);
+        if (!exists) {
+          await this.client.makeBucket(this.bucket);
+          this.logger.log(`Bucket "${this.bucket}" created`);
+        }
+        return;
+      } catch (err) {
+        this.logger.warn(
+          `MinIO init attempt ${i + 1}/${maxRetries} failed: ${(err as Error).message}`,
+        );
+        if (isPermanentError(err) || i === maxRetries - 1) throw err;
+        const delay = 1000 * 2 ** i + Math.random() * 500;
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+
+  async putObject(
+    key: string,
+    body: Buffer | Readable,
+    size?: number,
+    contentType?: string,
+  ): Promise<void> {
+    const resolvedSize = size ?? (Buffer.isBuffer(body) ? body.byteLength : undefined);
+    const meta = contentType ? { 'Content-Type': contentType } : {};
+    await this.client.putObject(this.bucket, key, body, resolvedSize, meta);
+  }
+
+  async getObject(key: string): Promise<Readable> {
+    return this.client.getObject(this.bucket, key);
+  }
+
+  async removeObject(key: string): Promise<void> {
+    await this.client.removeObject(this.bucket, key);
+  }
+}
