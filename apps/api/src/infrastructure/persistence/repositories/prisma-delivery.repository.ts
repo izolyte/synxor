@@ -4,6 +4,7 @@ import type { Delivery as PrismaDelivery } from '@prisma/client';
 import type { Delivery } from '../../../domain/delivery/delivery.entity';
 import type { CreateDeliveryInput } from '../../../domain/delivery/delivery.entity';
 import type { DeliveryRepository } from '../../../domain/delivery/delivery.repository';
+import { DuplicateDeliveryError } from '../../../domain/delivery/delivery.errors';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -15,7 +16,7 @@ export class PrismaDeliveryRepository implements DeliveryRepository {
       return this.toEntity(await this.prisma.delivery.create({ data: input }));
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new Error(`Delivery already recorded for transfer ${input.transferId}`);
+        throw new DuplicateDeliveryError(input.transferId);
       }
       throw err;
     }

@@ -27,9 +27,13 @@ export class PrismaParticipantRepository implements ParticipantRepository {
   }
 
   async setDisconnected(id: string, at: Date): Promise<Participant> {
-    return this.toEntity(
-      await this.prisma.participant.update({ where: { id }, data: { disconnectedAt: at } }),
-    );
+    await this.prisma.participant.updateMany({
+      where: { id, disconnectedAt: null },
+      data: { disconnectedAt: at },
+    });
+    const p = await this.prisma.participant.findUnique({ where: { id } });
+    if (!p) throw new Error(`Participant not found: ${id}`);
+    return this.toEntity(p);
   }
 
   async countConnected(roomId: string): Promise<number> {
