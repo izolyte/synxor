@@ -27,6 +27,19 @@ describe('MinioService', () => {
     service = module.get(MinioService);
   });
 
+  describe('constructor', () => {
+    it('throws when MINIO_ROOT_USER is missing', () => {
+      delete process.env.MINIO_ROOT_USER;
+      expect(() => new MinioService()).toThrow('MINIO_ROOT_USER and MINIO_ROOT_PASSWORD are required');
+    });
+
+    it('throws when MINIO_ROOT_PASSWORD is missing', () => {
+      process.env.MINIO_ROOT_USER = 'minioadmin';
+      delete process.env.MINIO_ROOT_PASSWORD;
+      expect(() => new MinioService()).toThrow('MINIO_ROOT_USER and MINIO_ROOT_PASSWORD are required');
+    });
+  });
+
   describe('onModuleInit', () => {
     it('creates bucket when it does not exist', async () => {
       mockClient.bucketExists.mockResolvedValue(false);

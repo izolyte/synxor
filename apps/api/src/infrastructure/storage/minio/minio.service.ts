@@ -5,16 +5,21 @@ import type { Readable } from 'stream';
 @Injectable()
 export class MinioService implements OnModuleInit {
   private readonly logger = new Logger(MinioService.name);
-  readonly client: Client;
-  readonly bucket: string;
+  private readonly client: Client;
+  private readonly bucket: string;
 
   constructor() {
+    const accessKey = process.env.MINIO_ROOT_USER;
+    const secretKey = process.env.MINIO_ROOT_PASSWORD;
+    if (!accessKey || !secretKey) {
+      throw new Error('MINIO_ROOT_USER and MINIO_ROOT_PASSWORD are required');
+    }
     this.client = new Client({
       endPoint: process.env.MINIO_ENDPOINT ?? 'localhost',
       port: parseInt(process.env.MINIO_PORT ?? '9000', 10),
       useSSL: process.env.MINIO_USE_SSL === 'true',
-      accessKey: process.env.MINIO_ROOT_USER!,
-      secretKey: process.env.MINIO_ROOT_PASSWORD!,
+      accessKey,
+      secretKey,
     });
     this.bucket = process.env.MINIO_BUCKET ?? 'transfers';
   }
@@ -37,6 +42,6 @@ export class MinioService implements OnModuleInit {
   }
 
   async removeObject(key: string): Promise<void> {
-    return this.client.removeObject(this.bucket, key);
+    await this.client.removeObject(this.bucket, key);
   }
 }
