@@ -30,13 +30,13 @@ describe('MinioService', () => {
   describe('constructor', () => {
     it('throws when MINIO_ROOT_USER is missing', () => {
       delete process.env.MINIO_ROOT_USER;
-      expect(() => new MinioService()).toThrow('MINIO_ROOT_USER and MINIO_ROOT_PASSWORD are required');
+      expect(() => new MinioService()).toThrow('MINIO_ROOT_USER is required');
     });
 
     it('throws when MINIO_ROOT_PASSWORD is missing', () => {
       process.env.MINIO_ROOT_USER = 'minioadmin';
       delete process.env.MINIO_ROOT_PASSWORD;
-      expect(() => new MinioService()).toThrow('MINIO_ROOT_USER and MINIO_ROOT_PASSWORD are required');
+      expect(() => new MinioService()).toThrow('MINIO_ROOT_PASSWORD is required');
     });
   });
 
@@ -121,10 +121,10 @@ describe('MinioService', () => {
       const fakeStream = { pipe: jest.fn() };
       mockClient.getObject.mockResolvedValue(fakeStream);
 
-      const result = await service.getObject(key);
+      const stream = await service.getObject(key);  
 
       expect(mockClient.getObject).toHaveBeenCalledWith('transfers', key);
-      expect(result).toBe(fakeStream);
+      expect(stream).toBe(fakeStream);
     });
 
     it('removeObject delegates to client', async () => {
