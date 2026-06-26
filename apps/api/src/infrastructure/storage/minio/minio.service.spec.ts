@@ -58,13 +58,40 @@ describe('MinioService', () => {
 
       expect(mockClient.makeBucket).not.toHaveBeenCalled();
     });
+
+    it('retries on transient error and succeeds', async () => {
+      jest.useFakeTimers();
+      mockClient.bucketExists
+        .mockRejectedValueOnce(new Error('connect ECONNREFUSED'))
+        .mockResolvedValue(true);
+
+      const init = service.onModuleInit();
+      await jest.runAllTimersAsync();
+      await init;
+
+      expect(mockClient.bucketExists).toHaveBeenCalledTimes(2);
+      expect(mockClient.makeBucket).not.toHaveBeenCalled();
+      jest.useRealTimers();
+    });
+
+    it('throws after 5 failed attempts', async () => {
+      jest.useFakeTimers();
+      mockClient.bucketExists.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      const assertion = expect(service.onModuleInit()).rejects.toThrow('connect ECONNREFUSED');
+      await jest.runAllTimersAsync();
+      await assertion;
+
+      expect(mockClient.bucketExists).toHaveBeenCalledTimes(5);
+      jest.useRealTimers();
+    });
   });
 
   describe('smoke test — upload → retrieve → delete', () => {
     const key = 'smoke/test.txt';
     const data = Buffer.from('hello');
 
-    it('putObject delegates to client', async () => {
+    it('putObject delegates to client with contentType', async () => {
       mockClient.putObject.mockResolvedValue({ etag: 'abc', versionId: null });
 
       await service.putObject(key, data, data.byteLength, 'text/plain');
@@ -72,6 +99,22 @@ describe('MinioService', () => {
       expect(mockClient.putObject).toHaveBeenCalledWith('transfers', key, data, data.byteLength, {
         'Content-Type': 'text/plain',
       });
+    });
+
+    it('putObject auto-computes size from Buffer when omitted', async () => {
+      mockClient.putObject.mockResolvedValue({ etag: 'abc', versionId: null });
+
+      await service.putObject(key, data);
+
+      expect(mockClient.putObject).toHaveBeenCalledWith('transfers', key, data, data.byteLength, {});
+    });
+
+    it('putObject passes empty meta when contentType omitted', async () => {
+      mockClient.putObject.mockResolvedValue({ etag: 'abc', versionId: null });
+
+      await service.putObject(key, data, data.byteLength);
+
+      expect(mockClient.putObject).toHaveBeenCalledWith('transfers', key, data, data.byteLength, {});
     });
 
     it('getObject returns client stream', async () => {

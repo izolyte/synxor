@@ -25,16 +25,26 @@ export class MinioService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    const exists = await this.client.bucketExists(this.bucket);
-    if (!exists) {
-      await this.client.makeBucket(this.bucket);
-      this.logger.log(`Bucket "${this.bucket}" created`);
+    const maxRetries = 5;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const exists = await this.client.bucketExists(this.bucket);
+        if (!exists) {
+          await this.client.makeBucket(this.bucket);
+          this.logger.log(`Bucket "${this.bucket}" created`);
+        }
+        return;
+      } catch (err) {
+        if (i === maxRetries - 1) throw err;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
     }
   }
 
   async putObject(key: string, data: Buffer | Readable, size?: number, contentType?: string): Promise<void> {
+    const resolvedSize = size ?? (Buffer.isBuffer(data) ? data.byteLength : -1);
     const meta = contentType ? { 'Content-Type': contentType } : {};
-    await this.client.putObject(this.bucket, key, data, size ?? -1, meta);
+    await this.client.putObject(this.bucket, key, data, resolvedSize, meta);
   }
 
   async getObject(key: string): Promise<Readable> {
