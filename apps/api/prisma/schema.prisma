@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoomStatus {
+  ACTIVE
+  CLOSED
+  EXPIRED
+}
+
+enum ParticipantRole {
+  SENDER
+  RECEIVER
+}
+
+enum PayloadType {
+  FILE
+  TEXT_SNIPPET
+  LINK
+}
+
+model Room {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  status    RoomStatus @default(ACTIVE)
+  expiresAt DateTime
+  createdAt DateTime   @default(now())
+
+  participants Participant[]
+  transfers    Transfer[]
+
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model Participant {
+  id             String          @id @default(cuid())
+  roomId         String
+  role           ParticipantRole
+  tokenHash      String          @unique
+  joinedAt       DateTime        @default(now())
+  disconnectedAt DateTime?
+
+  room Room @relation(fields: [roomId], references: [id])
+
+  @@index([roomId])
+}
+
+model Transfer {
+  id            String      @id @default(cuid())
+  roomId        String
+  payloadType   PayloadType
+  contentLength BigInt
+  createdAt     DateTime    @default(now())
+
+  room        Room         @relation(fields: [roomId], references: [id])
+  filePayload FilePayload?
+  delivery    Delivery?
+
+  @@index([roomId])
+}
+
+model FilePayload {
+  id            String @id @default(cuid())
+  transferId    String @unique
+  fileName      String
+  fileSizeBytes BigInt
+  mimeType      String
+  storageKey    String
+
+  transfer Transfer @relation(fields: [transferId], references: [id])
+}
+
+model Delivery {
+  id          String   @id @default(cuid())
+  transferId  String   @unique
+  deliveredAt DateTime
+  createdAt   DateTime @default(now())
+
+  transfer Transfer @relation(fields: [transferId], references: [id])
+}
