@@ -1,0 +1,10 @@
+# Dev overrides — exposes postgres and minio to localhost for local tooling
+# Merged automatically by `docker compose up` (no extra flags needed)
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  minio:
+    ports:
+      - "9000:9000"
