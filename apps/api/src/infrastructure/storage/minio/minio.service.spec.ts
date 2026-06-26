@@ -12,7 +12,9 @@ const mockClient = {
   removeObject: jest.fn(),
 };
 
-(Client as jest.MockedClass<typeof Client>).mockImplementation(() => mockClient as unknown as Client);
+(Client as jest.MockedClass<typeof Client>).mockImplementation(
+  () => mockClient as unknown as Client,
+);
 
 describe('MinioService', () => {
   let service: MinioService;
@@ -106,7 +108,13 @@ describe('MinioService', () => {
 
       await service.putObject(key, data);
 
-      expect(mockClient.putObject).toHaveBeenCalledWith('transfers', key, data, data.byteLength, {});
+      expect(mockClient.putObject).toHaveBeenCalledWith(
+        'transfers',
+        key,
+        data,
+        data.byteLength,
+        {},
+      );
     });
 
     it('putObject passes empty meta when contentType omitted', async () => {
@@ -114,14 +122,20 @@ describe('MinioService', () => {
 
       await service.putObject(key, data, data.byteLength);
 
-      expect(mockClient.putObject).toHaveBeenCalledWith('transfers', key, data, data.byteLength, {});
+      expect(mockClient.putObject).toHaveBeenCalledWith(
+        'transfers',
+        key,
+        data,
+        data.byteLength,
+        {},
+      );
     });
 
     it('getObject returns client stream', async () => {
       const fakeStream = { pipe: jest.fn() };
       mockClient.getObject.mockResolvedValue(fakeStream);
 
-      const stream = await service.getObject(key);  
+      const stream = await service.getObject(key);
 
       expect(mockClient.getObject).toHaveBeenCalledWith('transfers', key);
       expect(stream).toBe(fakeStream);

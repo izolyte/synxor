@@ -5,6 +5,11 @@ import { PersistenceModule } from './infrastructure/persistence/persistence.modu
 import { StorageModule } from './infrastructure/storage/storage.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), HealthModule, PersistenceModule, StorageModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    HealthModule,
+    PersistenceModule,
+    StorageModule,
+  ],
 })
 export class AppModule {}
