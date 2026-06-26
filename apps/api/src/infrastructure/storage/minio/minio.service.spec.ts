@@ -1,0 +1,82 @@
+import { Test } from '@nestjs/testing';
+import { MinioService } from './minio.service';
+import { Client } from 'minio';
+
+jest.mock('minio');
+
+const mockClient = {
+  bucketExists: jest.fn(),
+  makeBucket: jest.fn(),
+  putObject: jest.fn(),
+  getObject: jest.fn(),
+  removeObject: jest.fn(),
+};
+
+(Client as jest.MockedClass<typeof Client>).mockImplementation(() => mockClient as unknown as Client);
+
+describe('MinioService', () => {
+  let service: MinioService;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    process.env.MINIO_ROOT_USER = 'minioadmin';
+    process.env.MINIO_ROOT_PASSWORD = 'changeme';
+    process.env.MINIO_BUCKET = 'transfers';
+
+    const module = await Test.createTestingModule({ providers: [MinioService] }).compile();
+    service = module.get(MinioService);
+  });
+
+  describe('onModuleInit', () => {
+    it('creates bucket when it does not exist', async () => {
+      mockClient.bucketExists.mockResolvedValue(false);
+      mockClient.makeBucket.mockResolvedValue(undefined);
+
+      await service.onModuleInit();
+
+      expect(mockClient.bucketExists).toHaveBeenCalledWith('transfers');
+      expect(mockClient.makeBucket).toHaveBeenCalledWith('transfers');
+    });
+
+    it('skips makeBucket when bucket already exists', async () => {
+      mockClient.bucketExists.mockResolvedValue(true);
+
+      await service.onModuleInit();
+
+      expect(mockClient.makeBucket).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('smoke test — upload → retrieve → delete', () => {
+    const key = 'smoke/test.txt';
+    const data = Buffer.from('hello');
+
+    it('putObject delegates to client', async () => {
+      mockClient.putObject.mockResolvedValue({ etag: 'abc', versionId: null });
+
+      await service.putObject(key, data, data.byteLength, 'text/plain');
+
+      expect(mockClient.putObject).toHaveBeenCalledWith('transfers', key, data, data.byteLength, {
+        'Content-Type': 'text/plain',
+      });
+    });
+
+    it('getObject returns client stream', async () => {
+      const fakeStream = { pipe: jest.fn() };
+      mockClient.getObject.mockResolvedValue(fakeStream);
+
+      const result = await service.getObject(key);
+
+      expect(mockClient.getObject).toHaveBeenCalledWith('transfers', key);
+      expect(result).toBe(fakeStream);
+    });
+
+    it('removeObject delegates to client', async () => {
+      mockClient.removeObject.mockResolvedValue(undefined);
+
+      await service.removeObject(key);
+
+      expect(mockClient.removeObject).toHaveBeenCalledWith('transfers', key);
+    });
+  });
+});
