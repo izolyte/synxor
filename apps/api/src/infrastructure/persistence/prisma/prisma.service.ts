@@ -4,6 +4,8 @@ import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  private connected = false;
+
   constructor() {
     const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
     super({ adapter });
@@ -14,6 +16,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     for (let i = 0; i < maxRetries; i++) {
       try {
         await this.$connect();
+        this.connected = true;
         return;
       } catch (err) {
         if (i === maxRetries - 1) throw err;
@@ -23,6 +26,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleDestroy() {
-    await this.$disconnect();
+    if (this.connected) {
+      await this.$disconnect();
+      this.connected = false;
+    }
   }
 }
