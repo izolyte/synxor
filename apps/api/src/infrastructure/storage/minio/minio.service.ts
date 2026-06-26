@@ -59,8 +59,13 @@ export class MinioService implements OnModuleInit {
     }
   }
 
-  async putObject(key: string, body: Buffer | Readable, size?: number, contentType?: string): Promise<void> {
-    const resolvedSize = size ?? (Buffer.isBuffer(body) ? body.byteLength : -1);
+  async putObject(
+    key: string,
+    body: Buffer | Readable,
+    size?: number,
+    contentType?: string,
+  ): Promise<void> {
+    const resolvedSize = size ?? (Buffer.isBuffer(body) ? body.byteLength : undefined);
     const meta = contentType ? { 'Content-Type': contentType } : {};
     await this.client.putObject(this.bucket, key, body, resolvedSize, meta);
   }

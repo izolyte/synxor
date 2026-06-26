@@ -117,6 +117,15 @@ describe('MinioService', () => {
       );
     });
 
+    it('putObject passes undefined size for Readable without explicit size', async () => {
+      const stream = { pipe: jest.fn() } as unknown as import('stream').Readable;
+      mockClient.putObject.mockResolvedValue({ etag: 'abc', versionId: null });
+
+      await service.putObject(key, stream);
+
+      expect(mockClient.putObject).toHaveBeenCalledWith('transfers', key, stream, undefined, {});
+    });
+
     it('putObject passes empty meta when contentType omitted', async () => {
       mockClient.putObject.mockResolvedValue({ etag: 'abc', versionId: null });
 
