@@ -4,6 +4,6 @@ import { MinioService } from './minio/minio.service';
 
 @Module({
   imports: [MinioModule],
-  exports: [MinioService],
+  exports: [MinioModule],
 })
 export class StorageModule {}
