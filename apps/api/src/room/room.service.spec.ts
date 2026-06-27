@@ -1,17 +1,17 @@
 import { RoomService, type Expiry } from './room.service';
 import type { RoomRepository } from '../domain/room/room.repository';
+import { RoomCodeCollisionError } from '../domain/room/room.errors';
 import type { ICodeGenerator } from './code-generator.interface';
 import type { ITokenIssuer, TokenClaims } from './token-issuer.interface';
 import type { Room, CreateRoomInput, RoomStatus } from '../domain/room/room.entity';
-
-// ---------------------------------------------------------------------------
-// Fakes
-// ---------------------------------------------------------------------------
 
 class FakeRoomRepository implements RoomRepository {
   readonly stored = new Map<string, Room>();
 
   async create(input: CreateRoomInput): Promise<Room> {
+    if (this.stored.has(input.code)) {
+      throw new RoomCodeCollisionError(input.code);
+    }
     const room: Room = {
       id: `room-${this.stored.size + 1}`,
       code: input.code,
@@ -44,6 +44,11 @@ class FakeRoomRepository implements RoomRepository {
       (r) => r.status === 'ACTIVE' && r.expiresAt <= now,
     );
   }
+
+  async delete(id: string): Promise<void> {
+    const room = [...this.stored.values()].find((r) => r.id === id);
+    if (room) this.stored.delete(room.code);
+  }
 }
 
 class FakeCodeGenerator implements ICodeGenerator {
@@ -62,16 +67,14 @@ class FakeCodeGenerator implements ICodeGenerator {
 
 class FakeTokenIssuer implements ITokenIssuer {
   readonly calls: Array<{ claims: TokenClaims; expiresAt: Date }> = [];
+  shouldThrow = false;
 
   sign(claims: TokenClaims, expiresAt: Date): string {
+    if (this.shouldThrow) throw new Error('signing failed');
     this.calls.push({ claims, expiresAt });
     return `tok.${claims.roomId}.${claims.role}`;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function setup(codes: string[], overrides: { existingCodes?: string[] } = {}) {
   const repo = new FakeRoomRepository();
@@ -90,88 +93,83 @@ function setup(codes: string[], overrides: { existingCodes?: string[] } = {}) {
   return { service, repo, codeGen, tokenIssuer };
 }
 
-// ---------------------------------------------------------------------------
-// Cycle 1 — Room Code format
-// ---------------------------------------------------------------------------
-
 describe('RoomService.create', () => {
-  it('returns a 6-char uppercase alphanumeric Room Code', async () => {
-    const { service } = setup(['AB3X7Z']);
-    const result = await service.create('1h');
-    expect(result.roomCode).toMatch(/^[A-Z0-9]{6}$/);
-  });
-
-  // ---------------------------------------------------------------------------
-  // Cycle 2 — Room Code uniqueness / retry
-  // ---------------------------------------------------------------------------
-
-  it('retries code generation on collision and returns the next unique code', async () => {
-    const { service, repo } = setup(['TAKEN1', 'UNIQUE'], {
-      existingCodes: ['TAKEN1'],
+  describe('Room Code', () => {
+    it('returns a 6-char uppercase alphanumeric Room Code', async () => {
+      const { service } = setup(['AB3X7Z']);
+      const result = await service.create('1h');
+      expect(result.roomCode).toMatch(/^[A-Z0-9]{6}$/);
     });
-    const result = await service.create('1h');
-    expect(result.roomCode).toBe('UNIQUE');
-    expect(repo.stored.has('UNIQUE')).toBe(true);
-  });
 
-  it('throws after 5 consecutive collisions', async () => {
-    const { service } = setup(['CLASH', 'CLASH', 'CLASH', 'CLASH', 'CLASH'], {
-      existingCodes: ['CLASH'],
+    it('retries on collision and returns the next unique code', async () => {
+      const { service, repo } = setup(['TAKEN1', 'UNIQU2'], {
+        existingCodes: ['TAKEN1'],
+      });
+      const result = await service.create('1h');
+      expect(result.roomCode).toBe('UNIQU2');
+      expect(repo.stored.has('UNIQU2')).toBe(true);
     });
-    await expect(service.create('1h')).rejects.toThrow(
-      'Failed to generate unique Room Code',
-    );
-  });
 
-  // ---------------------------------------------------------------------------
-  // Cycle 3 — Room persisted
-  // ---------------------------------------------------------------------------
-
-  it('persists the Room via the repository', async () => {
-    const { service, repo } = setup(['STORED']);
-    await service.create('1h');
-    expect(repo.stored.has('STORED')).toBe(true);
-  });
-
-  // ---------------------------------------------------------------------------
-  // Cycle 4 — JWT claims
-  // ---------------------------------------------------------------------------
-
-  it('issues a Room Token with roomId and role:sender', async () => {
-    const { service, repo, tokenIssuer } = setup(['JWTABC']);
-    await service.create('24h');
-    const room = repo.stored.get('JWTABC')!;
-    expect(tokenIssuer.calls).toHaveLength(1);
-    expect(tokenIssuer.calls[0].claims).toEqual({
-      roomId: room.id,
-      role: 'sender',
+    it('throws after 5 consecutive collisions', async () => {
+      const { service } = setup(['CLASH1', 'CLASH1', 'CLASH1', 'CLASH1', 'CLASH1'], {
+        existingCodes: ['CLASH1'],
+      });
+      await expect(service.create('1h')).rejects.toThrow(
+        'Failed to generate unique Room Code',
+      );
     });
   });
 
-  it('returns the token string from the issuer', async () => {
-    const { service, repo } = setup(['TOKRET']);
-    const result = await service.create('1h');
-    const room = repo.stored.get('TOKRET')!;
-    expect(result.roomToken).toBe(`tok.${room.id}.sender`);
+  describe('persistence', () => {
+    it('persists the Room via the repository', async () => {
+      const { service, repo } = setup(['STORE1']);
+      await service.create('1h');
+      expect(repo.stored.has('STORE1')).toBe(true);
+    });
+
+    it('deletes the orphaned Room when token signing fails', async () => {
+      const { service, repo, tokenIssuer } = setup(['ORPHN1']);
+      tokenIssuer.shouldThrow = true;
+      await expect(service.create('1h')).rejects.toThrow('signing failed');
+      expect(repo.stored.has('ORPHN1')).toBe(false);
+    });
   });
 
-  // ---------------------------------------------------------------------------
-  // Cycle 5 — Expiry calculation
-  // ---------------------------------------------------------------------------
+  describe('Room Token', () => {
+    it('issues a token with roomId and role:sender', async () => {
+      const { service, repo, tokenIssuer } = setup(['JWTAB1']);
+      await service.create('24h');
+      const room = repo.stored.get('JWTAB1')!;
+      expect(tokenIssuer.calls).toHaveLength(1);
+      expect(tokenIssuer.calls[0].claims).toEqual({
+        roomId: room.id,
+        role: 'sender',
+      });
+    });
 
-  it.each<[Expiry, number]>([
-    ['1h', 60 * 60 * 1_000],
-    ['24h', 24 * 60 * 60 * 1_000],
-    ['7d', 7 * 24 * 60 * 60 * 1_000],
-  ])('sets expiresAt ≈ now + %s (%i ms)', async (expiry, ms) => {
-    const before = Date.now();
-    const { service, repo } = setup([`EXP${expiry.toUpperCase().replace(/[^A-Z0-9]/g, '')}`]);
-    await service.create(expiry);
-    const after = Date.now();
+    it('returns the token string from the issuer', async () => {
+      const { service, repo } = setup(['TOKRE1']);
+      const result = await service.create('1h');
+      const room = repo.stored.get('TOKRE1')!;
+      expect(result.roomToken).toBe(`tok.${room.id}.sender`);
+    });
+  });
 
-    const room = [...repo.stored.values()][0];
-    const expiresMs = room.expiresAt.getTime();
-    expect(expiresMs).toBeGreaterThanOrEqual(before + ms);
-    expect(expiresMs).toBeLessThanOrEqual(after + ms + 50); // 50 ms tolerance
+  describe('Expiry', () => {
+    it.each<[Expiry, string, number]>([
+      ['1h', 'HOUR01', 60 * 60 * 1_000],
+      ['24h', 'DAY024', 24 * 60 * 60 * 1_000],
+      ['7d', 'WEEK07', 7 * 24 * 60 * 60 * 1_000],
+    ])('sets expiresAt ≈ now + %s', async (expiry, code, ms) => {
+      const before = Date.now();
+      const { service, repo } = setup([code]);
+      await service.create(expiry);
+      const after = Date.now();
+
+      const room = repo.stored.get(code)!;
+      const expiresMs = room.expiresAt.getTime();
+      expect(expiresMs).toBeGreaterThanOrEqual(before + ms);
+      expect(expiresMs).toBeLessThanOrEqual(after + ms + 50); // 50 ms tolerance
+    });
   });
 });

@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { initTRPC } from '@trpc/server';
+import { router } from './init';
 import { RoomRouter } from '../room/room.router';
-
-const t = initTRPC.create();
 
 @Injectable()
 export class TrpcService {
@@ -13,7 +11,7 @@ export class TrpcService {
   }
 
   private buildAppRouter() {
-    return t.router({
+    return router({
       room: this.roomRouter.router,
     });
   }

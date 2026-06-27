@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
+import { router, publicProcedure } from '../trpc/init';
 import { RoomService } from './room.service';
-
-const t = initTRPC.create();
 
 @Injectable()
 export class RoomRouter {
@@ -14,12 +12,10 @@ export class RoomRouter {
   }
 
   private buildRouter() {
-    return t.router({
-      create: t.procedure
+    return router({
+      create: publicProcedure
         .input(z.object({ expiry: z.enum(['1h', '24h', '7d']) }))
         .mutation(({ input }) => this.roomService.create(input.expiry)),
     });
   }
 }
-
-export type RoomTrpcRouter = RoomRouter['router'];

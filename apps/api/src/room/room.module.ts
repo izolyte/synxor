@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { PersistenceModule } from '../infrastructure/persistence/persistence.module';
 import { RoomService } from './room.service';
 import { CryptoCodeGenerator } from './crypto-code-generator';
@@ -12,7 +12,6 @@ import { TOKEN_ISSUER } from './token-issuer.interface';
   imports: [
     PersistenceModule,
     JwtModule.registerAsync({
-      imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_SECRET'),

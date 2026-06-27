@@ -7,7 +7,9 @@ export class JwtTokenIssuer implements ITokenIssuer {
   constructor(private readonly jwt: JwtService) {}
 
   sign(claims: TokenClaims, expiresAt: Date): string {
-    const exp = Math.floor(expiresAt.getTime() / 1000);
-    return this.jwt.sign({ ...claims, exp });
+    // Pass expiry through sign options, not a payload `exp` claim: jsonwebtoken
+    // rejects a payload that carries `exp` alongside an options `expiresIn`.
+    const expiresInSeconds = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+    return this.jwt.sign(claims, { expiresIn: expiresInSeconds });
   }
 }
