@@ -17,3 +17,15 @@ export class InvalidExpiryError extends DomainError {
     super(`Unknown Expiry: ${value}`);
   }
 }
+
+export class RoomNotFoundError extends DomainError {
+  constructor(code: string) {
+    super(`No Room found for Room Code: ${code}`);
+  }
+}
+
+export class RoomExpiredError extends DomainError {
+  constructor(code: string) {
+    super(`Room is no longer available: ${code}`);
+  }
+}

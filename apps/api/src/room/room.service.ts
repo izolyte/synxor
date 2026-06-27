@@ -1,8 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ROOM_REPOSITORY, type RoomRepository } from '../domain/room/room.repository';
-import { RoomCodeCollisionError, RoomCodeExhaustionError } from '../domain/room/room.errors';
+import {
+  RoomCodeCollisionError,
+  RoomCodeExhaustionError,
+  RoomExpiredError,
+  RoomNotFoundError,
+} from '../domain/room/room.errors';
 import type { Room } from '../domain/room/room.entity';
+import { isExpired } from '../domain/room/room-status';
 import type { CreateRoomResult } from './dto/create-room.dto';
+import type { JoinRoomResult } from './dto/join-room.dto';
 import { ROOM_CODE_MAX_ATTEMPTS } from '../domain/room/room-code';
 import { type Expiry, resolveExpiresAt } from '../domain/room/room-expiry';
 import { CODE_GENERATOR, type CodeGenerator } from '../domain/security/code-generator';
@@ -37,6 +44,18 @@ export class RoomService {
       });
       throw err;
     }
+  }
+
+  async join(roomCode: string): Promise<JoinRoomResult> {
+    const room = await this.rooms.findByCode(roomCode);
+    if (!room) throw new RoomNotFoundError(roomCode);
+    if (isExpired(room)) throw new RoomExpiredError(roomCode);
+
+    const roomToken = this.tokenIssuer.sign(
+      { roomId: room.id, role: TokenRole.Receiver },
+      room.expiresAt,
+    );
+    return { roomToken, roomId: room.id };
   }
 
   // Lets the DB's unique constraint on Room.code arbitrate collisions, rather
