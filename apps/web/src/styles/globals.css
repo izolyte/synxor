@@ -344,21 +344,28 @@
 
   @media (prefers-contrast: more) {
     :root {
-      /* Override shadcn contract tokens for higher contrast */
-      --border: oklch(0.60 0.012 200);
-      --input: oklch(0.60 0.012 200);
+      --border:           oklch(0.60 0.012 200);
+      --input:            oklch(0.60 0.012 200);
       --muted-foreground: oklch(0.30 0.012 200);
-
-      /* Also update semantic tokens for consistency */
-      --color-border: oklch(0.60 0.012 200);
-      --color-ink-muted: oklch(0.30 0.012 200);
+      --color-border:     oklch(0.60 0.012 200);
+      --color-ink-muted:  oklch(0.30 0.012 200);
       --color-ink-subtle: oklch(0.42 0.010 200);
+    }
+
+    .dark {
+      --border:           oklch(0.50 0.014 200);
+      --input:            oklch(0.50 0.014 200);
+      --muted-foreground: oklch(0.82 0.010 200);
+      --color-border:     oklch(0.50 0.014 200);
+      --color-ink-muted:  oklch(0.82 0.010 200);
+      --color-ink-subtle: oklch(0.74 0.008 200);
     }
   }
 
   @media (forced-colors: active) {
-    .focus-ring:focus-visible { outline-color: Highlight; }
-    .status-pill               { border: 1px solid ButtonText; }
+    /* box-shadow rings are stripped in forced-colors; restore outline for all focus-visible */
+    *:focus-visible    { outline: 2px solid Highlight; outline-offset: 2px; }
+    .status-pill       { border: 1px solid ButtonText; }
   }
 
   *,
