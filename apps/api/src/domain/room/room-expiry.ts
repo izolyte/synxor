@@ -14,9 +14,9 @@ export type Expiry = keyof typeof EXPIRY_DURATIONS_MS;
 export const EXPIRY_VALUES = Object.keys(EXPIRY_DURATIONS_MS) as [Expiry, ...Expiry[]];
 
 /**
- * Computes the expiration date for a room.
+ * Computes the timestamp when a room expires.
  *
- * @param expiry - The allowed expiry option to resolve.
+ * @param expiry - The expiry option to resolve.
  * @param now - The current timestamp in milliseconds.
  * @returns The expiration date.
  */
