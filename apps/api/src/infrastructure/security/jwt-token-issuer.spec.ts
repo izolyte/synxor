@@ -25,8 +25,13 @@ describe('JwtTokenIssuer', () => {
   });
 
   it('rejects a token once its expiry has passed', () => {
-    const token = issuer.sign({ roomId: 'room-1', role: TokenRole.Sender }, new Date(Date.now() - SECOND_MS));
+    const token = issuer.sign(
+      { roomId: 'room-1', role: TokenRole.Sender },
+      new Date(Date.now() - SECOND_MS),
+    );
 
-    expect(() => jwt.verify(token)).toThrow();
+    expect(() => {
+      jwt.verify(token);
+    }).toThrow();
   });
 });
