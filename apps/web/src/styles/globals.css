@@ -341,8 +341,14 @@
 
   @media (prefers-contrast: more) {
     :root {
-      --color-border:     oklch(0.60 0.012 200);
-      --color-ink-muted:  oklch(0.30 0.012 200);
+      /* Override shadcn contract tokens for higher contrast */
+      --border: oklch(0.60 0.012 200);
+      --input: oklch(0.60 0.012 200);
+      --muted-foreground: oklch(0.30 0.012 200);
+
+      /* Also update semantic tokens for consistency */
+      --color-border: oklch(0.60 0.012 200);
+      --color-ink-muted: oklch(0.30 0.012 200);
       --color-ink-subtle: oklch(0.42 0.010 200);
     }
   }
