@@ -21,6 +21,12 @@ export const Route = createRootRoute({
   component: RootComponent,
 });
 
+/**
+ * Renders the root HTML shell for the application.
+ *
+ * @remarks
+ * Includes router-managed head content, the theme initialization script, the active route outlet, and router scripts.
+ */
 function RootComponent() {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -36,6 +42,11 @@ function RootComponent() {
   );
 }
 
+/**
+ * Renders the 404 not-found page.
+ *
+ * @returns The not-found page layout.
+ */
 function NotFoundPage() {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -62,6 +73,13 @@ function NotFoundPage() {
   );
 }
 
+/**
+ * Renders the root error page.
+ *
+ * @param error - The error to display in development mode.
+ * @param reset - Handles the retry action.
+ * @returns The error page document.
+ */
 function ErrorPage({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <html lang="en" suppressHydrationWarning>

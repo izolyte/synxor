@@ -5,6 +5,11 @@ export const Route = createFileRoute("/")({
   component: IndexPage,
 });
 
+/**
+ * Renders the landing page content.
+ *
+ * @returns The root page layout with the `synxor` label and a `Transfer` button.
+ */
 function IndexPage() {
   return (
     <main className="bg-background flex min-h-dvh flex-col items-center justify-center gap-6">

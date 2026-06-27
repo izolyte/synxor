@@ -36,6 +36,12 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
 
+/**
+ * Renders a styled button with configurable variant and size.
+ *
+ * @param variant - The visual style variant to apply.
+ * @param size - The button size variant to apply.
+ */
 export function Button({ className, variant, size, ...props }: ButtonProps) {
   return (
     <button type="button" className={cn(buttonVariants({ variant, size, className }))} {...props} />
