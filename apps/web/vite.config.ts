@@ -8,6 +8,9 @@ import { fileURLToPath } from "url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
+  server: {
+    port: 3000,
+  },
   plugins: [react(), tanstackStart(), tailwindcss()],
   resolve: {
     alias: {
