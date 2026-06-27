@@ -29,5 +29,9 @@ pnpm-debug.log*
 # Test coverage
 coverage/
 
+# Generated
+**/routeTree.gen.ts
+vite.config.timestamp_*
+
 # Temp
 .scratch/
