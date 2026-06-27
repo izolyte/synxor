@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { z } from 'zod';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { trpcResult } from './trpc-response';
 import { TrpcModule } from './../src/trpc/trpc.module';
 import { TRPC_PATH } from './../src/trpc/trpc.constants';
 import { PrismaService } from './../src/infrastructure/persistence/prisma/prisma.service';
@@ -51,7 +53,9 @@ describe('Room creation (e2e)', () => {
       .send({ expiry: '1h' })
       .expect(200);
 
-    const { roomCode, roomToken } = res.body.result.data;
+    const { roomCode, roomToken } = trpcResult(
+      z.object({ roomCode: z.string(), roomToken: z.string() }),
+    ).parse(res.body).result.data;
     expect(roomCode).toMatch(ROOM_CODE_PATTERN);
     expect(roomToken.split('.')).toHaveLength(3); // header.payload.signature
   });
