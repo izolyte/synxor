@@ -4,7 +4,7 @@ import "@fontsource-variable/geist-mono/wght.css";
 import "../styles/globals.css";
 import { Button } from "~/components/ui/button";
 
-const themeScript = `(function(){var d=document.documentElement,s=localStorage.getItem("theme");(s==="dark"||(!s&&matchMedia("(prefers-color-scheme:dark)").matches))&&(d.classList.add("dark"),d.setAttribute("data-theme","dark"))})()`;
+const themeScript = `(function(){var d=document.documentElement,s=null;try{s=localStorage.getItem("theme")}catch(_){}(s==="dark"||(!s&&matchMedia("(prefers-color-scheme:dark)").matches))&&(d.classList.add("dark"),d.setAttribute("data-theme","dark"))})()`;
 
 export const Route = createRootRoute({
   head: () => ({
@@ -75,7 +75,7 @@ function ErrorPage({ error, reset }: { error: Error; reset: () => void }) {
             Error
           </span>
           <p className="text-foreground max-w-sm text-center text-sm">
-            {error.message || "Something went wrong."}
+            {import.meta.env.DEV && error.message ? error.message : "Something went wrong."}
           </p>
           <Button variant="ghost" onClick={reset}>
             Try again
