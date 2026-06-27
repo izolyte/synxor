@@ -35,14 +35,57 @@
 
 @layer base {
   :root {
-    /* shadcn/ui contract */
+    /* ── Layer 1: Primitive palette ── */
+    /* Never reference in components — use semantic tokens */
+    --primitive-teal-950: oklch(0.10 0.020 200);
+    --primitive-teal-900: oklch(0.15 0.022 200);
+    --primitive-teal-800: oklch(0.22 0.025 200);
+    --primitive-teal-700: oklch(0.32 0.030 200);
+    --primitive-teal-600: oklch(0.46 0.060 200);
+    --primitive-teal-500: oklch(0.62 0.100 200); /* brand anchor */
+    --primitive-teal-400: oklch(0.72 0.090 200);
+    --primitive-teal-300: oklch(0.82 0.060 200);
+    --primitive-teal-200: oklch(0.90 0.030 200);
+    --primitive-teal-100: oklch(0.95 0.015 200);
+    --primitive-teal-50:  oklch(0.975 0.008 200);
+
+    --primitive-green-900: oklch(0.18 0.040 165);
+    --primitive-green-700: oklch(0.42 0.100 165);
+    --primitive-green-500: oklch(0.62 0.140 165);
+    --primitive-green-400: oklch(0.72 0.140 165);
+    --primitive-green-300: oklch(0.82 0.100 165);
+    --primitive-green-100: oklch(0.94 0.040 165);
+
+    --primitive-red-900: oklch(0.22 0.060 20);
+    --primitive-red-600: oklch(0.52 0.180 20);
+    --primitive-red-500: oklch(0.60 0.180 20);
+    --primitive-red-100: oklch(0.94 0.040 20);
+
+    --primitive-amber-700: oklch(0.55 0.130 75);
+    --primitive-amber-500: oklch(0.76 0.120 75);
+    --primitive-amber-100: oklch(0.95 0.040 75);
+
+    --primitive-white:    oklch(1.000 0.000 0);
+    --primitive-gray-50:  oklch(0.980 0.000 0);
+    --primitive-gray-100: oklch(0.960 0.000 0);
+    --primitive-gray-200: oklch(0.920 0.000 0);
+    --primitive-gray-300: oklch(0.870 0.000 0);
+    --primitive-gray-400: oklch(0.720 0.000 0);
+    --primitive-gray-500: oklch(0.560 0.000 0);
+    --primitive-gray-600: oklch(0.440 0.000 0);
+    --primitive-gray-700: oklch(0.320 0.000 0);
+    --primitive-gray-800: oklch(0.220 0.000 0);
+    --primitive-gray-900: oklch(0.140 0.000 0);
+    --primitive-black:    oklch(0.040 0.000 0);
+
+    /* ── shadcn/ui contract ── */
     --background: oklch(1 0 0);
     --foreground: oklch(0.12 0.012 200);
     --card: oklch(0.99 0.004 200);
     --card-foreground: oklch(0.12 0.012 200);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.12 0.012 200);
-    --primary: oklch(0.52 0.11 200);
+    --primary: oklch(0.62 0.100 200);
     --primary-foreground: oklch(1 0 0);
     --secondary: oklch(0.94 0.01 200);
     --secondary-foreground: oklch(0.2 0.015 200);
@@ -54,10 +97,10 @@
     --destructive-foreground: oklch(1 0 0);
     --border: oklch(0.88 0.012 200);
     --input: oklch(0.88 0.012 200);
-    --ring: oklch(0.52 0.11 200);
+    --ring: oklch(0.62 0.100 200);
     --radius: 0.5rem;
 
-    /* Synxor aliases */
+    /* ── Synxor aliases (shadcn bridge) ── */
     --color-bg: var(--background);
     --color-surface: var(--card);
     --color-border: var(--border);
@@ -67,7 +110,7 @@
     --color-primary-fg: var(--primary-foreground);
     --color-destructive: var(--destructive);
 
-    /* Synxor-exclusive */
+    /* ── Layer 2: Semantic tokens ── */
     --color-bg-subtle: oklch(0.975 0.008 200);
     --color-surface-raised: oklch(0.955 0.008 200);
     --color-overlay: oklch(0.08 0 0 / 0.45);
@@ -77,41 +120,42 @@
     --color-ink-on-error: oklch(1 0 0);
     --color-ink-on-warning: oklch(0.15 0 0);
     --color-ink-inverted: oklch(0.975 0.008 200);
-    --color-primary-hover: oklch(0.46 0.115 200);
-    --color-primary-active: oklch(0.41 0.12 200);
+    --color-primary-hover: oklch(0.56 0.110 200);
+    --color-primary-active: oklch(0.50 0.115 200);
     --color-primary-subtle: oklch(0.95 0.015 200);
     --color-primary-muted: oklch(0.82 0.06 200);
     --color-accent: oklch(0.78 0.14 165);
     --color-accent-hover: oklch(0.7 0.14 165);
     --color-accent-subtle: oklch(0.94 0.04 165);
     --color-border-strong: oklch(0.78 0.012 200);
-    --color-border-focus: oklch(0.52 0.11 200);
+    --color-border-focus: oklch(0.62 0.100 200);
     --color-success: oklch(0.62 0.14 165);
     --color-success-subtle: oklch(0.94 0.04 165);
+    --color-success-border: oklch(0.72 0.1 165);
     --color-warning: oklch(0.76 0.12 75);
     --color-warning-subtle: oklch(0.95 0.04 75);
+    --color-warning-border: oklch(0.65 0.11 75);
     --color-error: oklch(0.6 0.18 20);
     --color-error-subtle: oklch(0.94 0.04 20);
     --color-error-border: oklch(0.52 0.16 20);
-    --color-success-border: oklch(0.72 0.1 165);
-    --color-warning-border: oklch(0.65 0.11 75);
     --color-info: oklch(0.62 0.1 200);
     --color-info-subtle: oklch(0.95 0.015 200);
     --color-info-border: oklch(0.72 0.06 200);
 
-    /* Transfer states */
+    /* ── Transfer states ── */
     --color-transfer-idle: var(--border);
     --color-transfer-waiting: var(--color-primary-muted);
     --color-transfer-progress: var(--primary);
     --color-transfer-delivered: var(--color-accent);
     --color-transfer-failed: var(--color-error);
     --color-transfer-expired: var(--color-warning);
+
     --color-room-empty: oklch(0.66 0.008 200);
     --color-room-live: var(--color-accent);
     --color-room-expiring: var(--color-warning);
     --color-room-expired: var(--color-error);
 
-    /* Motion */
+    /* ── Motion ── */
     --duration-instant: 0ms;
     --duration-fast: 100ms;
     --duration-normal: 200ms;
@@ -121,7 +165,7 @@
     --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
     --ease-linear: linear;
 
-    /* Elevation */
+    /* ── Elevation ── */
     --shadow-xs: 0 1px 2px oklch(0.15 0.012 200 / 0.06);
     --shadow-sm: 0 1px 3px oklch(0.15 0.012 200 / 0.1), 0 1px 2px oklch(0.15 0.012 200 / 0.06);
     --shadow-md: 0 4px 6px oklch(0.15 0.012 200 / 0.07), 0 2px 4px oklch(0.15 0.012 200 / 0.06);
@@ -129,7 +173,7 @@
     --shadow-xl: 0 20px 25px oklch(0.15 0.012 200 / 0.1), 0 10px 10px oklch(0.15 0.012 200 / 0.04);
     --shadow-none: none;
 
-    /* Z-index */
+    /* ── Z-index ── */
     --z-base: 0;
     --z-raised: 10;
     --z-dropdown: 100;
@@ -139,7 +183,7 @@
     --z-toast: 500;
     --z-tooltip: 600;
 
-    /* Spacing */
+    /* ── Spacing ── */
     --space-px: 1px;
     --space-0-5: 0.125rem;
     --space-1: 0.25rem;
@@ -155,6 +199,71 @@
     --space-16: 4rem;
     --space-20: 5rem;
     --space-24: 6rem;
+
+    /* ── Typography ── */
+    --text-2xs: 0.625rem;
+    --text-xs:  0.75rem;
+    --text-sm:  0.875rem;
+    --text-md:  1rem;
+    --text-lg:  1.25rem;
+    --text-xl:  1.5rem;
+    --text-2xl: 2rem;
+
+    --font-normal:   400;
+    --font-medium:   500;
+    --font-semibold: 600;
+    --font-bold:     700;
+
+    --leading-tight:  1.2;
+    --leading-snug:   1.375;
+    --leading-normal: 1.5;
+    --leading-loose:  1.75;
+
+    --tracking-tight:   -0.02em;
+    --tracking-normal:   0em;
+    --tracking-wide:     0.04em;
+    --tracking-wider:    0.08em;
+    --tracking-display:  0.2em;  /* uppercase display labels only */
+
+    --width-prose: 65ch;
+
+    /* ── Layout / Container ── */
+    --width-narrow:  30rem;
+    --width-content: 40rem;
+    --width-full:    100%;
+
+    --gutter-mobile:  var(--space-4);
+    --gutter-tablet:  var(--space-6);
+    --gutter-desktop: var(--space-8);
+
+    --header-height: 3.5rem;
+
+    --dropzone-height-mobile:  calc(100dvh - var(--header-height));
+    --dropzone-height-tablet:  17.5rem;
+    --dropzone-height-desktop: 22.5rem;
+
+    --bp-sm:  480px;
+    --bp-md:  768px;
+    --bp-lg:  1024px;
+    --bp-xl:  1280px;
+
+    /* ── Focus ring ── */
+    --focus-ring-width:  2px;
+    --focus-ring-offset: 2px;
+    --focus-ring-color:  var(--color-border-focus);
+    --focus-ring-radius: var(--radius-md);
+
+    /* ── Skeleton ── */
+    --skeleton-bg:      oklch(0.920 0.000 0);
+    --skeleton-shimmer: oklch(0.960 0.000 0);
+
+    /* ── Icon sizes ── */
+    --icon-xs:  0.75rem;
+    --icon-sm:  1rem;
+    --icon-md:  1.25rem;
+    --icon-lg:  1.5rem;
+    --icon-xl:  2rem;
+    --icon-2xl: 3rem;
   }
 
   /* ── Dark mode ── */
@@ -197,17 +306,21 @@
     --color-border-focus: oklch(0.68 0.1 200);
     --color-success: oklch(0.72 0.14 165);
     --color-success-subtle: oklch(0.18 0.04 165);
+    --color-success-border: oklch(0.42 0.1 165);
     --color-warning: oklch(0.76 0.12 75);
     --color-warning-subtle: oklch(0.18 0.05 75);
+    --color-warning-border: oklch(0.55 0.11 75);
     --color-error: oklch(0.65 0.18 20);
     --color-error-subtle: oklch(0.2 0.06 20);
     --color-error-border: oklch(0.45 0.14 20);
-    --color-success-border: oklch(0.42 0.1 165);
-    --color-warning-border: oklch(0.55 0.11 75);
     --color-info: oklch(0.68 0.1 200);
     --color-info-subtle: oklch(0.18 0.02 200);
     --color-info-border: oklch(0.38 0.06 200);
     --color-room-empty: oklch(0.42 0.008 200);
+
+    /* Skeleton dark overrides */
+    --skeleton-bg:      oklch(0.20 0.008 200);
+    --skeleton-shimmer: oklch(0.26 0.010 200);
 
     /* Elevation dark overrides */
     --shadow-xs: 0 1px 2px oklch(0.04 0 0 / 0.3);
@@ -224,6 +337,19 @@
       --duration-slow: 0ms;
       --duration-crawl: 0ms;
     }
+  }
+
+  @media (prefers-contrast: more) {
+    :root {
+      --color-border:     oklch(0.60 0.012 200);
+      --color-ink-muted:  oklch(0.30 0.012 200);
+      --color-ink-subtle: oklch(0.42 0.010 200);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .focus-ring:focus-visible { outline-color: Highlight; }
+    .status-pill               { border: 1px solid ButtonText; }
   }
 
   *,
@@ -263,12 +389,13 @@
   h3 {
     text-wrap: balance;
   }
+
   p {
     text-wrap: pretty;
   }
 
   ::selection {
-    background-color: oklch(0.52 0.11 200 / 0.25);
+    background-color: oklch(0.62 0.100 200 / 0.25);
     color: var(--foreground);
   }
 
