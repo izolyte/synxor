@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { router } from './init';
-import { RoomRouter } from '../room/room.router';
+import { router } from './trpc';
+import { RoomRouter } from './routers/room.router';
 
 @Injectable()
 export class TrpcService {

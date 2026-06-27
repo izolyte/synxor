@@ -1,5 +1,5 @@
 export const CODE_GENERATOR = Symbol('CODE_GENERATOR');
 
-export interface ICodeGenerator {
+export interface CodeGenerator {
   generate(): string;
 }
