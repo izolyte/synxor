@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     port: 3000,
   },
-  plugins: [react(), tanstackStart(), tailwindcss()],
+  plugins: [tanstackStart(), react(), tailwindcss()],
   resolve: {
     alias: {
       "~": path.resolve(__dirname, "./src"),
