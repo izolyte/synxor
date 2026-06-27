@@ -5,7 +5,7 @@ import { CODE_GENERATOR } from '../../domain/security/code-generator';
 import { TOKEN_ISSUER } from '../../domain/security/token-issuer';
 import { CryptoCodeGenerator } from './crypto-code-generator';
 import { JwtTokenIssuer } from './jwt-token-issuer';
-import { JWT_ALGORITHM, JWT_SECRET_ENV, JWT_SECRET_MIN_LENGTH } from './security.constants';
+import { JWT_ALGORITHM, JWT_SECRET_ENV, JWT_SECRET_MIN_BYTES } from './security.constants';
 
 @Module({
   imports: [
@@ -13,8 +13,8 @@ import { JWT_ALGORITHM, JWT_SECRET_ENV, JWT_SECRET_MIN_LENGTH } from './security
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const secret = config.getOrThrow<string>(JWT_SECRET_ENV).trim();
-        if (secret.length < JWT_SECRET_MIN_LENGTH) {
-          throw new Error(`${JWT_SECRET_ENV} must be at least ${JWT_SECRET_MIN_LENGTH} characters`);
+        if (Buffer.byteLength(secret, 'utf8') < JWT_SECRET_MIN_BYTES) {
+          throw new Error(`${JWT_SECRET_ENV} must be at least ${JWT_SECRET_MIN_BYTES} bytes`);
         }
         return { secret, signOptions: { algorithm: JWT_ALGORITHM } };
       },
