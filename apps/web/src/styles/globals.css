@@ -1,3 +1,5 @@
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/geist-mono/wght.css";
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -332,6 +334,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     :root {
+      --duration-instant: 0ms;
       --duration-fast: 0ms;
       --duration-normal: 0ms;
       --duration-slow: 0ms;

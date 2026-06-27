@@ -1,6 +1,4 @@
 import { createRootRoute, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
-import "@fontsource-variable/geist/wght.css";
-import "@fontsource-variable/geist-mono/wght.css";
 import "../styles/globals.css";
 import { Button } from "~/components/ui/button";
 
