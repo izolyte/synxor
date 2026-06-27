@@ -6,13 +6,14 @@ import { RoomCodeCollisionError } from './room.errors';
 // inspect state directly. Excluded from the production build (*.fake.ts).
 export class InMemoryRoomRepository implements RoomRepository {
   readonly stored = new Map<string, Room>();
+  private nextId = 1;
 
   async create(input: CreateRoomInput): Promise<Room> {
     if (this.stored.has(input.code)) {
       throw new RoomCodeCollisionError(input.code);
     }
     const room: Room = {
-      id: `room-${this.stored.size + 1}`,
+      id: `room-${this.nextId++}`,
       code: input.code,
       status: 'ACTIVE',
       expiresAt: input.expiresAt,
