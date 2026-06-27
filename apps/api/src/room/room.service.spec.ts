@@ -1,9 +1,14 @@
 import { Logger } from '@nestjs/common';
 import { RoomService } from './room.service';
 import type { Expiry } from '../domain/room/room-expiry';
-import { RoomCodeExhaustionError } from '../domain/room/room.errors';
+import {
+  RoomCodeExhaustionError,
+  RoomExpiredError,
+  RoomNotFoundError,
+} from '../domain/room/room.errors';
 import { ROOM_CODE_MAX_ATTEMPTS, ROOM_CODE_PATTERN } from '../domain/room/room-code';
 import { InMemoryRoomRepository } from '../domain/room/room.repository.fake';
+import type { Room, RoomStatus } from '../domain/room/room.entity';
 import type { CodeGenerator } from '../domain/security/code-generator';
 import { TokenRole, type TokenClaims, type TokenIssuer } from '../domain/security/token-issuer';
 import { DAY_MS, HOUR_MS } from '../common/time';
@@ -138,5 +143,72 @@ describe('RoomService.create', () => {
       expect(expiresMs).toBeGreaterThanOrEqual(before + ms);
       expect(expiresMs).toBeLessThanOrEqual(after + ms + CLOCK_TOLERANCE_MS);
     });
+  });
+});
+
+function seedRoom(repo: InMemoryRoomRepository, room: Partial<Room> & { code: string }): Room {
+  const full: Room = {
+    id: `seed-${room.code}`,
+    status: 'ACTIVE',
+    expiresAt: new Date(Date.now() + HOUR_MS),
+    createdAt: new Date(),
+    ...room,
+  };
+  repo.stored.set(full.code, full);
+  return full;
+}
+
+describe('RoomService.join', () => {
+  it('returns a Receiver Room Token and the roomId for a valid Room Code', async () => {
+    const { service, repo } = setup([]);
+    const room = seedRoom(repo, { code: 'JOIN01' });
+
+    const result = await service.join('JOIN01');
+
+    expect(result).toEqual({
+      roomToken: `tok.${room.id}.${TokenRole.Receiver}`,
+      roomId: room.id,
+    });
+  });
+
+  it('signs the token with the roomId, receiver role, and the Room Expiry', async () => {
+    const { service, repo, tokenIssuer } = setup([]);
+    const room = seedRoom(repo, { code: 'CLAIM1' });
+
+    await service.join('CLAIM1');
+
+    expect(tokenIssuer.calls).toHaveLength(1);
+    expect(tokenIssuer.calls[0]).toEqual({
+      claims: { roomId: room.id, role: TokenRole.Receiver },
+      expiresAt: room.expiresAt,
+    });
+  });
+
+  it('throws RoomNotFoundError when no Room matches the Room Code', async () => {
+    const { service } = setup([]);
+    await expect(service.join('NOPE99')).rejects.toThrow(RoomNotFoundError);
+  });
+
+  it('throws RoomExpiredError when the Room is past its Expiry', async () => {
+    const { service, repo } = setup([]);
+    seedRoom(repo, { code: 'GONE01', expiresAt: new Date(Date.now() - 1) });
+    await expect(service.join('GONE01')).rejects.toThrow(RoomExpiredError);
+  });
+
+  it.each<RoomStatus>(['EXPIRED', 'CLOSED'])(
+    'throws RoomExpiredError when the Room status is %s',
+    async (status) => {
+      const { service, repo } = setup([]);
+      seedRoom(repo, { code: 'SHUT01', status, expiresAt: new Date(Date.now() + HOUR_MS) });
+      await expect(service.join('SHUT01')).rejects.toThrow(RoomExpiredError);
+    },
+  );
+
+  it('does not issue a token when the Room is expired', async () => {
+    const { service, repo, tokenIssuer } = setup([]);
+    seedRoom(repo, { code: 'GONE02', expiresAt: new Date(Date.now() - 1) });
+
+    await expect(service.join('GONE02')).rejects.toThrow(RoomExpiredError);
+    expect(tokenIssuer.calls).toHaveLength(0);
   });
 });

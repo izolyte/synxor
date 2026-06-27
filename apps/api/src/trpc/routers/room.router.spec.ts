@@ -5,6 +5,7 @@ import type { RoomService } from '../../room/room.service';
 function setup() {
   const roomService = {
     create: jest.fn().mockResolvedValue({ roomCode: 'ABC123', roomToken: 'tok' }),
+    join: jest.fn().mockResolvedValue({ roomToken: 'tok', roomId: 'room-1' }),
   };
   const roomRouter = new RoomRouter(roomService as unknown as RoomService);
   const caller = t.createCallerFactory(roomRouter.router)({});
@@ -23,5 +24,18 @@ describe('RoomRouter', () => {
     const { roomService, caller } = setup();
     await expect(caller.create({ expiry: '2h' as never })).rejects.toThrow();
     expect(roomService.create).not.toHaveBeenCalled();
+  });
+
+  it('delegates join to RoomService and returns its result', async () => {
+    const { roomService, caller } = setup();
+    const result = await caller.join({ roomCode: 'AB3X7Z' });
+    expect(roomService.join).toHaveBeenCalledWith('AB3X7Z');
+    expect(result).toEqual({ roomToken: 'tok', roomId: 'room-1' });
+  });
+
+  it('rejects a malformed Room Code before reaching the service', async () => {
+    const { roomService, caller } = setup();
+    await expect(caller.join({ roomCode: 'nope' })).rejects.toThrow();
+    expect(roomService.join).not.toHaveBeenCalled();
   });
 });
