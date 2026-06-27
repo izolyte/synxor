@@ -74,6 +74,11 @@ describe('Room API (e2e)', () => {
 
   describe('room.join', () => {
     const joinResult = trpcResult(z.object({ roomToken: z.string(), roomId: z.string() }));
+    // tRPC error envelope. A thrown domain error currently surfaces as
+    // INTERNAL_SERVER_ERROR / 500 — mapping domain errors to 4xx is deferred to
+    // #28 — so the negative cases assert the stable part: the surfaced message,
+    // which proves the specific rejection fired rather than a generic crash.
+    const trpcErrorMessage = z.object({ error: z.object({ message: z.string() }) });
 
     it('issues a Receiver Room Token for a valid Room Code', async () => {
       const created = await request(app.getHttpServer())
@@ -108,6 +113,9 @@ describe('Room API (e2e)', () => {
 
       expect(res.status).toBeGreaterThanOrEqual(400);
       expect(joinResult.safeParse(res.body).success).toBe(false);
+      expect(trpcErrorMessage.parse(res.body).error.message).toBe(
+        'No Room found for Room Code: ZZ9ZZ9',
+      );
     });
 
     it('rejects an expired Room', async () => {
@@ -125,6 +133,9 @@ describe('Room API (e2e)', () => {
 
       expect(res.status).toBeGreaterThanOrEqual(400);
       expect(joinResult.safeParse(res.body).success).toBe(false);
+      expect(trpcErrorMessage.parse(res.body).error.message).toBe(
+        'Room is no longer available: EXPIR1',
+      );
     });
   });
 });
