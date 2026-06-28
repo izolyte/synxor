@@ -29,6 +29,11 @@ pnpm-debug.log*
 # Test coverage
 coverage/
 
+# Playwright
+playwright-report/
+test-results/
+.playwright/
+
 # Generated
 **/routeTree.gen.ts
 vite.config.timestamp_*

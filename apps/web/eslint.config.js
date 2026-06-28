@@ -19,6 +19,13 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["node_modules/", ".output/", "src/routeTree.gen.ts"],
+    ignores: [
+      "node_modules/",
+      ".output/",
+      "dist/",
+      "coverage/",
+      "playwright-report/",
+      "src/routeTree.gen.ts",
+    ],
   },
 );
