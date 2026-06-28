@@ -17,8 +17,14 @@ export interface RouterAppContext {
 // api is a separate host, so the URL must be absolute (also required for SSR).
 // Set VITE_API_URL outside local dev.
 function trpcUrl() {
-  const base = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
-  return `${base}/trpc`;
+  const base = import.meta.env.VITE_API_URL;
+  if (!base) {
+    if (import.meta.env.DEV) {
+      return "http://localhost:3000/trpc";
+    }
+    throw new Error("VITE_API_URL must be set outside local development");
+  }
+  return `${base.replace(/\/+$/, "")}/trpc`;
 }
 
 function createTrpcClient() {
