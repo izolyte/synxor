@@ -21,9 +21,13 @@ describeDriverContract("vitest", async () =>
 // than through the shared (port-only) kit.
 suite("driver contract — vitest seed", () => {
   test("seed primes localStorage before the app loads", async () => {
-    const driver = createVitestDriver();
-    await driver.seed({ localStorage: { theme: "dark" } });
-    expect(window.localStorage.getItem("theme")).toBe("dark");
+    try {
+      const driver = createVitestDriver();
+      await driver.seed({ localStorage: { theme: "dark" } });
+      expect(window.localStorage.getItem("theme")).toBe("dark");
+    } finally {
+      window.localStorage.clear();
+    }
   });
 });
 
