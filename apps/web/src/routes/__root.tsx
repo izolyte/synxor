@@ -1,10 +1,11 @@
-import { createRootRoute, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
+import { createRootRouteWithContext, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
 import "../styles/globals.css";
 import { Button } from "~/components/ui/button";
+import type { RouterAppContext } from "~/lib/trpc";
 
 const themeScript = `(function(){var d=document.documentElement,s=null;try{s=localStorage.getItem("theme")}catch(_){}(s==="dark"||(!s&&matchMedia("(prefers-color-scheme:dark)").matches))&&(d.classList.add("dark"),d.setAttribute("data-theme","dark"))})()`;
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },

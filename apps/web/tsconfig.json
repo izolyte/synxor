@@ -12,6 +12,9 @@
     "paths": {
       "~/*": ["./src/*"],
       "~test/*": ["./test/*"]
-    }
+    },
+    // Type-checking the imported AppRouter pulls in api source that uses Nest
+    // @Injectable() decorators; enable so that syntax parses. Type-only at runtime.
+    "experimentalDecorators": true
   }
 }
