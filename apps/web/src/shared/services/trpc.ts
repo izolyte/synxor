@@ -15,21 +15,25 @@ export interface RouterAppContext {
 }
 
 // api is a separate host, so the URL must be absolute (also required for SSR).
-// Set VITE_API_URL outside local dev.
-function trpcUrl() {
-  const base = import.meta.env.VITE_API_URL;
+// Set VITE_API_URL outside local dev. Pure + env passed in, so it's unit-testable
+// without constructing the client.
+export function resolveTrpcUrl(env: { VITE_API_URL?: string; DEV: boolean }): string {
+  const base = env.VITE_API_URL;
   if (!base) {
-    if (import.meta.env.DEV) {
+    if (env.DEV) {
       return "http://localhost:3000/trpc";
     }
     throw new Error("VITE_API_URL must be set outside local development");
   }
-  return `${base.replace(/\/+$/, "")}/trpc`;
+  // Accept either a bare API origin or one that already ends in /trpc, so a
+  // misconfigured env can't produce /trpc/trpc.
+  const trimmed = base.replace(/\/+$/, "");
+  return trimmed.endsWith("/trpc") ? trimmed : `${trimmed}/trpc`;
 }
 
 function createTrpcClient() {
   return createTRPCClient<AppRouter>({
-    links: [httpBatchLink({ url: trpcUrl() })],
+    links: [httpBatchLink({ url: resolveTrpcUrl(import.meta.env) })],
   });
 }
 

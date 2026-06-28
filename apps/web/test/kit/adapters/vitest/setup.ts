@@ -8,6 +8,10 @@ import { afterAll, afterEach, beforeAll } from "vitest";
 
 import { server } from "./backend";
 
+// jsdom has no layout engine; TanStack Router's scroll restoration calls
+// window.scrollTo, which jsdom otherwise logs as "Not implemented".
+window.scrollTo = (() => {}) as unknown as typeof window.scrollTo;
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   cleanup();

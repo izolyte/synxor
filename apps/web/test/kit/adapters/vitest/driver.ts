@@ -1,14 +1,20 @@
 // The Vitest Driver: drives the app in jsdom (component/integration level), owns
 // an MSW backend, and seeds client state. Query logic is the shared dom/ module
-// with Vitest's `expect` injected. `visit` mounts a route once the app has routes
-// to mount; until then it fails loudly rather than pretending.
+// with Vitest's `expect` injected. `visit` mounts the real router at a path with
+// a memory history — the app's own providers (query client, tRPC) come along, and
+// MSW owns the network. This adapter is intentionally app-aware; the portable
+// surface stays in dom/queries.ts.
 
+import { createElement } from "react";
 import userEvent from "@testing-library/user-event";
+import { render } from "@testing-library/react";
+import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { expect as vitestExpect } from "vitest";
 
 import type { Driver } from "../../types";
 import { type DomExpect, makeScreen } from "../dom/queries";
 import { createBackend } from "./backend";
+import { createRouter } from "~/router";
 
 export function createVitestDriver(): Driver {
   const user = userEvent.setup();
@@ -24,12 +30,12 @@ export function createVitestDriver(): Driver {
         window.localStorage.setItem(key, value);
       }
     },
-    async visit() {
-      throw new Error(
-        "VitestDriver.visit is not wired yet — the app has no routes to mount. " +
-          "Implement route mounting when the first page lands, or use " +
-          "renderComponent for component-level specs.",
-      );
+    async visit(path) {
+      const router = createRouter({
+        history: createMemoryHistory({ initialEntries: [path] }),
+      });
+      render(createElement(RouterProvider, { router }));
+      await router.load();
     },
   };
 }

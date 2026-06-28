@@ -19,9 +19,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./test/kit/adapters/vitest/setup.ts"],
-    // Unit + component + the kit's own self-tests. Scenarios are dual-run and need
-    // pages that don't exist yet.
-    include: ["src/**/*.spec.{ts,tsx}", "test/**/*.spec.{ts,tsx}"],
+    // Unit + component + the kit's own self-tests, plus journey scenarios (now
+    // that VitestDriver.visit mounts routes, scenarios dual-run here too).
+    include: ["src/**/*.spec.{ts,tsx}", "test/**/*.spec.{ts,tsx}", "test/**/*.scenario.ts"],
     clearMocks: true,
     css: false,
     coverage: {

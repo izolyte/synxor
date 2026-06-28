@@ -140,6 +140,7 @@
     --color-error: oklch(0.6 0.18 20);
     --color-error-subtle: oklch(0.94 0.04 20);
     --color-error-border: oklch(0.52 0.16 20);
+    --color-error-text: oklch(0.53 0.18 20); /* error text on bg — AA in light */
     --color-info: oklch(0.62 0.1 200);
     --color-info-subtle: oklch(0.95 0.015 200);
     --color-info-border: oklch(0.72 0.06 200);
@@ -315,6 +316,7 @@
     --color-error: oklch(0.65 0.18 20);
     --color-error-subtle: oklch(0.2 0.06 20);
     --color-error-border: oklch(0.45 0.14 20);
+    --color-error-text: oklch(0.65 0.18 20); /* error text on bg — AA in dark */
     --color-info: oklch(0.68 0.1 200);
     --color-info-subtle: oklch(0.18 0.02 200);
     --color-info-border: oklch(0.38 0.06 200);
@@ -443,5 +445,15 @@
   }
   50% {
     transform: scale(1.04);
+  }
+}
+
+/* Reveal for messages that appear on a state change (e.g. a form error). Token
+   duration collapses to 0ms under prefers-reduced-motion, so it degrades to an
+   instant switch. */
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
 }
