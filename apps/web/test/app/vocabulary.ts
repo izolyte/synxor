@@ -7,16 +7,41 @@
 // shapes, expiry values) do NOT — those come from the backend tRPC `AppRouter`
 // by inference, never hand-written in test.
 
-import type { ActionableSelector } from "~test/kit";
+import type { ActionableSelector, ReadonlySelector } from "~test/kit";
 
 export const copy = {
   app: {
-    transfer: "Transfer",
+    notFound: "Page not found.",
+  },
+  createRoom: {
+    heading: "New Room",
+    expiryLabel: "Expires after",
+    expiry: {
+      "1h": "1 hour",
+      "24h": "24 hours",
+      "7d": "7 days",
+    },
+    cta: "Create Room",
+    error: "Couldn't create the Room. Try again.",
   },
 } as const;
 
 export const selectors = {
   app: {
-    transferCta: { role: "button", name: copy.app.transfer } as const satisfies ActionableSelector,
+    notFound: { text: copy.app.notFound } as const satisfies ReadonlySelector,
+  },
+  createRoom: {
+    heading: {
+      role: "heading",
+      name: copy.createRoom.heading,
+    } as const satisfies ActionableSelector,
+    cta: {
+      role: "button",
+      name: copy.createRoom.cta,
+    } as const satisfies ActionableSelector,
+    expiryOption: (key: keyof typeof copy.createRoom.expiry) =>
+      ({ role: "radio", name: copy.createRoom.expiry[key] }) as const satisfies ActionableSelector,
+    error: { text: copy.createRoom.error } as const satisfies ReadonlySelector,
   },
 };
+

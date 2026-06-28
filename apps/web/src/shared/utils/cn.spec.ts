@@ -2,7 +2,7 @@
 // Imports `suite/test/expect` from the kit, never from Vitest, so the
 // framework stays swappable here too.
 
-import { cn } from "~/lib/utils";
+import { cn } from "~/shared/utils/cn";
 import { expect, suite, test } from "~test/kit";
 
 suite("cn", () => {

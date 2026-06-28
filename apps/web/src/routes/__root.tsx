@@ -1,7 +1,9 @@
 import { createRootRouteWithContext, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
 import "../styles/globals.css";
-import { Button } from "~/components/ui/button";
-import type { RouterAppContext } from "~/lib/trpc";
+import { Button } from "~/shared/ui/button";
+import { Wordmark } from "~/shared/components/Wordmark";
+import { CenteredScreen } from "~/shared/components/CenteredScreen";
+import type { RouterAppContext } from "~/shared/services/trpc";
 
 const themeScript = `(function(){var d=document.documentElement,s=null;try{s=localStorage.getItem("theme")}catch(_){}(s==="dark"||(!s&&matchMedia("(prefers-color-scheme:dark)").matches))&&(d.classList.add("dark"),d.setAttribute("data-theme","dark"))})()`;
 
@@ -54,10 +56,8 @@ function NotFoundPage() {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <main className="bg-background flex min-h-dvh flex-col items-center justify-center gap-4">
-          <span className="text-muted-foreground font-mono text-xs font-medium tracking-[0.2em] uppercase">
-            404
-          </span>
+        <CenteredScreen className="gap-4">
+          <Wordmark>404</Wordmark>
           <p className="text-foreground text-sm">Page not found.</p>
           <Link
             to="/"
@@ -65,7 +65,7 @@ function NotFoundPage() {
           >
             Go home
           </Link>
-        </main>
+        </CenteredScreen>
         <Scripts />
       </body>
     </html>
@@ -87,17 +87,15 @@ function ErrorPage({ error, reset }: { error: Error; reset: () => void }) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <main className="bg-background flex min-h-dvh flex-col items-center justify-center gap-4">
-          <span className="text-muted-foreground font-mono text-xs font-medium tracking-[0.2em] uppercase">
-            Error
-          </span>
+        <CenteredScreen className="gap-4">
+          <Wordmark>Error</Wordmark>
           <p className="text-foreground max-w-sm text-center text-sm">
             {import.meta.env.DEV && error.message ? error.message : "Something went wrong."}
           </p>
           <Button variant="ghost" onClick={reset}>
             Try again
           </Button>
-        </main>
+        </CenteredScreen>
         <Scripts />
       </body>
     </html>
