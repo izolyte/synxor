@@ -76,7 +76,8 @@ function element(
       (await find()).focus();
     },
     async check() {
-      await user.click(await find());
+      const el = await find();
+      if (!(el as HTMLInputElement).checked) await user.click(el);
     },
     async shouldBeVisible() {
       expect(await find()).toBeVisible();

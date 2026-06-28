@@ -39,7 +39,7 @@ function locatorFor(root: LocatorRoot, selector: Selector): Locator {
 function element(locator: () => Locator): Element {
   return {
     click: () => locator().click(),
-    type: (text) => locator().fill(text),
+    type: (text) => locator().pressSequentially(text),
     clear: () => locator().clear(),
     press: (key) => locator().press(key),
     focus: () => locator().focus(),
@@ -66,11 +66,11 @@ function makeScreen(root: LocatorRoot): Screen {
 function makeStub(page: Page, procedure: string): Stub {
   const url = `**${trpcProcedurePath(procedure)}`;
   return {
-    resolves(output) {
-      void page.route(url, (route) => route.fulfill({ json: trpcOk(output) }));
+    async resolves(output) {
+      await page.route(url, (route) => route.fulfill({ json: trpcOk(output) }));
     },
-    rejects(error) {
-      void page.route(url, (route) =>
+    async rejects(error) {
+      await page.route(url, (route) =>
         route.fulfill({ status: 400, json: trpcError(error) }),
       );
     },

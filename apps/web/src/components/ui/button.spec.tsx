@@ -1,19 +1,13 @@
 // Component / UI level. Crosses the framework seam (TestKit) and the query
 // surface (Screen), but not the Driver — a single component is mounted in
-// isolation. Note there is no markup or copy in the assertions: the label comes
-// from `copy`, the locator from `selectors`. Change the wording once, in
-// vocabulary.ts, and this test follows.
+// isolation. No markup or copy in the assertions: the label comes from `copy`,
+// the locator from `selectors`.
 
 import { Button } from "~/components/ui/button";
 import { beforeEach, expect, fn, renderComponent, suite, test } from "~test/kit";
 import { copy, selectors } from "~test/app";
 
 suite("Button", () => {
-  let setupRuns = 0;
-  beforeEach(() => {
-    setupRuns += 1;
-  });
-
   test("shows its label", async () => {
     const screen = renderComponent(<Button>{copy.app.transfer}</Button>);
     await screen.find(selectors.app.transferCta).shouldBeVisible();
@@ -45,8 +39,16 @@ suite("Button", () => {
     const screen = renderComponent(<Button disabled>{copy.app.transfer}</Button>);
     await screen.find(selectors.app.transferCta).shouldBeDisabled();
   });
+});
 
-  test("runs beforeEach before each test", () => {
-    expect(setupRuns > 0).toBe(true);
+// A one-test suite: `runs` is exactly 1 only if beforeEach runs before that test.
+suite("beforeEach", () => {
+  let runs = 0;
+  beforeEach(() => {
+    runs += 1;
+  });
+
+  test("runs once before this test", () => {
+    expect(runs).toBe(1);
   });
 });

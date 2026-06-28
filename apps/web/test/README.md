@@ -25,7 +25,7 @@ Smoke isn't a type — it's a minimal test written at whichever level above fits
 
 ## Commands
 
-```
+```bash
 pnpm test           # unit + component + hook (Vitest)
 pnpm test:watch     # Vitest watch
 pnpm test:coverage  # + v8 coverage

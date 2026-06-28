@@ -63,9 +63,12 @@ export interface Screen {
 // Controls the network a UI sees. Generic: mocks an RPC procedure by name and
 // knows nothing about Room or Transfer — the app layer wraps it into a typed,
 // domain-named facade.
+// resolves/rejects are async so callers can await route registration before
+// firing the request — otherwise the request can outrace the mock and hit the
+// real backend.
 export interface Stub<Output = unknown> {
-  resolves(output: Output): void;
-  rejects(error: { code: string; message?: string }): void;
+  resolves(output: Output): Promise<void>;
+  rejects(error: { code: string; message?: string }): Promise<void>;
 }
 
 export interface BackendMock {
@@ -110,9 +113,9 @@ export interface HookResult<T> {
 }
 
 // E2E drivers the runtime seam accepts. A new promise-based tool plugs in by
-// passing the conformance contract. Cypress is listed but does not fit — its
-// command queue can't run the shared async contract, and it is single-context.
-export type E2eDriver = "playwright" | "selenium" | "webdriverio" | "cypress";
+// passing the conformance contract. Cypress is excluded — its command queue can't
+// run the shared async contract, and it is single-context.
+export type E2eDriver = "playwright" | "selenium" | "webdriverio";
 
 // What a journey spec receives: a Driver and nothing more. Building a domain App
 // from it is the app layer's job, so the tool stays business-free.

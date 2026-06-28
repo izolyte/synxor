@@ -13,10 +13,10 @@ export const server = setupServer();
 function makeStub(procedure: string): Stub {
   const route = `*${trpcProcedurePath(procedure)}`;
   return {
-    resolves(output) {
+    async resolves(output) {
       server.use(http.post(route, () => HttpResponse.json(trpcOk(output))));
     },
-    rejects(error) {
+    async rejects(error) {
       server.use(
         http.post(route, () =>
           HttpResponse.json(trpcError(error), { status: 400 }),
