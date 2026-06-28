@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import type { BackendMock, Stub } from "../../types";
-import { trpcError, trpcOk, trpcProcedurePath } from "../../trpc-transport";
+import { trpcError, trpcHttpStatus, trpcOk, trpcProcedurePath } from "../../trpc-transport";
 
 export const server = setupServer();
 
@@ -19,7 +19,7 @@ function makeStub(procedure: string): Stub {
     async rejects(error) {
       server.use(
         http.post(route, () =>
-          HttpResponse.json(trpcError(error), { status: 400 }),
+          HttpResponse.json(trpcError(error), { status: trpcHttpStatus(error.code) }),
         ),
       );
     },

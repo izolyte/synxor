@@ -1,9 +1,7 @@
+import { useId } from "react";
 import { ToggleGroup, ToggleGroupItem } from "~/shared/ui/toggle-group";
 import { EXPIRY_OPTIONS } from "~/features/room/constants/expiry";
 import type { Expiry } from "~/features/room/types/expiry";
-
-// Ties the visible label to the radiogroup; one const so id + reference can't drift.
-const EXPIRY_LABEL_ID = "expiry-label";
 
 /**
  * Controlled expiry picker: a labelled single-select of how long the Room lives.
@@ -23,10 +21,12 @@ export function ExpiryField({
     0,
     EXPIRY_OPTIONS.findIndex((option) => option.value === value),
   );
+  // Per-instance id so two ExpiryFields on a page don't collide.
+  const labelId = useId();
 
   return (
     <div className="flex flex-col gap-2">
-      <span id={EXPIRY_LABEL_ID} className="text-foreground text-sm font-medium">
+      <span id={labelId} className="text-foreground text-sm font-medium">
         Expires after
       </span>
       <ToggleGroup
@@ -38,7 +38,7 @@ export function ExpiryField({
           if (next) onChange(next as Expiry);
         }}
         disabled={disabled}
-        aria-labelledby={EXPIRY_LABEL_ID}
+        aria-labelledby={labelId}
         className="relative w-full gap-0 rounded-md border border-input p-1"
       >
         {/* Single sliding pill behind the labels (transform only). Token duration

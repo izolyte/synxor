@@ -27,6 +27,12 @@ suite("resolveTrpcUrl", () => {
     );
   });
 
+  test("does not double the /trpc suffix when the base already includes it", () => {
+    expect(resolveTrpcUrl({ VITE_API_URL: "https://api.example.com/trpc", DEV: false })).toBe(
+      "https://api.example.com/trpc",
+    );
+  });
+
   test("falls back to localhost in dev when unset", () => {
     expect(resolveTrpcUrl({ DEV: true })).toBe("http://localhost:3000/trpc");
   });

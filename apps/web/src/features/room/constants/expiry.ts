@@ -1,11 +1,15 @@
 import type { Expiry } from "~/features/room/types/expiry";
 
-// Display order; the values are the contract enum (see types/expiry), so dropping
-// or renaming an option on the backend surfaces as a type error rather than drift.
-export const EXPIRY_OPTIONS: readonly { value: Expiry; label: string }[] = [
-  { value: "1h", label: "1 hour" },
-  { value: "24h", label: "24 hours" },
-  { value: "7d", label: "7 days" },
-];
+// Exhaustive over Expiry: adding a value to the backend contract fails to compile
+// here until it gets a label. Display order = key order below.
+const EXPIRY_LABELS: Record<Expiry, string> = {
+  "1h": "1 hour",
+  "24h": "24 hours",
+  "7d": "7 days",
+};
+
+export const EXPIRY_OPTIONS: readonly { value: Expiry; label: string }[] = (
+  Object.keys(EXPIRY_LABELS) as Expiry[]
+).map((value) => ({ value, label: EXPIRY_LABELS[value] }));
 
 export const DEFAULT_EXPIRY: Expiry = "24h";

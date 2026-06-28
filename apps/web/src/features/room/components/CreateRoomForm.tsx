@@ -1,11 +1,8 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button } from "~/shared/ui/button";
 import { ExpiryField } from "~/features/room/components/ExpiryField";
 import { DEFAULT_EXPIRY } from "~/features/room/constants/expiry";
 import type { Expiry } from "~/features/room/types/expiry";
-
-// One const so the alert's id and the button's aria-describedby can't drift.
-const ERROR_ID = "create-error";
 
 /**
  * The Create Room form: owns the expiry selection, submits it, and surfaces the
@@ -21,12 +18,16 @@ export function CreateRoomForm({
   error: boolean;
 }) {
   const [expiry, setExpiry] = useState<Expiry>(DEFAULT_EXPIRY);
+  const errorId = useId();
 
   return (
     <form
       className="flex flex-col gap-6"
       onSubmit={(event) => {
         event.preventDefault();
+        // Guard re-entrant submits (e.g. a fast second Enter) on the
+        // non-idempotent create path; the disabled CTA is only a UI guard.
+        if (pending) return;
         onCreate(expiry);
       }}
     >
@@ -35,7 +36,7 @@ export function CreateRoomForm({
       <Button
         type="submit"
         loading={pending}
-        aria-describedby={error ? ERROR_ID : undefined}
+        aria-describedby={error ? errorId : undefined}
         className="w-full text-base"
       >
         Create Room
@@ -44,7 +45,7 @@ export function CreateRoomForm({
       {/* --color-error-text is theme-split, so it meets AA contrast in both themes. */}
       {error && (
         <p
-          id={ERROR_ID}
+          id={errorId}
           role="alert"
           className="animate-[message-in_var(--duration-normal)_var(--ease-out)] text-[var(--color-error-text)] text-xs"
         >

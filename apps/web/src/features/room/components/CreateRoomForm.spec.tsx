@@ -34,6 +34,15 @@ suite("CreateRoomForm", () => {
     await screen.find(selectors.createRoom.cta).shouldBeDisabled();
   });
 
+  test("does not call onCreate while pending", async () => {
+    const onCreate = fn<[Expiry], void>();
+    const screen = renderComponent(<CreateRoomForm onCreate={onCreate} pending error={false} />);
+
+    await screen.find(selectors.createRoom.cta).click();
+
+    expect(onCreate.calls.length).toBe(0);
+  });
+
   test("shows an error message on failure", async () => {
     const screen = renderComponent(<CreateRoomForm onCreate={fn()} pending={false} error />);
     await screen.find(selectors.createRoom.error).shouldBeVisible();

@@ -26,15 +26,42 @@ export class RoomTokenService {
   }
 }
 
-// sessionStorage in the browser (per-tab, cleared on close); an in-memory map on
-// the server (SSR has no window) so the singleton is always usable.
-function defaultStorage(): RoomTokenStorage {
-  if (typeof window !== "undefined") return window.sessionStorage;
+function memoryStorage(): RoomTokenStorage {
   const memory = new Map<string, string>();
   return {
     getItem: (key) => memory.get(key) ?? null,
     setItem: (key, value) => void memory.set(key, value),
   };
+}
+
+// sessionStorage in the browser (per-tab, cleared on close); an in-memory fallback
+// on the server (no window) and whenever Web Storage throws (private mode, disabled
+// storage) so token access never crashes the create flow.
+function defaultStorage(): RoomTokenStorage {
+  const fallback = memoryStorage();
+  if (typeof window === "undefined") return fallback;
+
+  try {
+    const storage = window.sessionStorage;
+    return {
+      getItem: (key) => {
+        try {
+          return storage.getItem(key);
+        } catch {
+          return fallback.getItem(key);
+        }
+      },
+      setItem: (key, value) => {
+        try {
+          storage.setItem(key, value);
+        } catch {
+          fallback.setItem(key, value);
+        }
+      },
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 // App-wide instance; tests construct their own with a fake storage.
