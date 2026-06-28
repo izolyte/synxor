@@ -6,7 +6,8 @@
 import { useState } from "react";
 
 import { createVitestDriver } from "~test/kit/adapters/vitest/driver";
-import { expect, renderHook, renderComponent, suite, test } from "~test/kit";
+import { expect, suite, test } from "~test/kit";
+import { renderComponent, renderHook } from "~test/kit/component";
 import { TWO_LISTS_FIXTURE } from "./contract";
 import { describeDriverContract } from "./driver-contract";
 

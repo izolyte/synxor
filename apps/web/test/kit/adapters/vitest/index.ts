@@ -12,11 +12,6 @@ import {
 } from "vitest";
 
 import type { Expect, Mock, Runtime } from "../../types";
-import { type DomExpect } from "../dom/queries";
-import {
-  renderComponent as domRenderComponent,
-  renderHook as domRenderHook,
-} from "../dom/render";
 import { createVitestDriver } from "./driver";
 
 // Runtime keeps the full Vitest matchers; the type narrows callers to the
@@ -41,8 +36,6 @@ export const runtime: Runtime = {
     }),
   beforeEach: (body) => vitestBeforeEach(body),
   afterEach: (body) => vitestAfterEach(body),
-  renderComponent: (ui) => domRenderComponent(ui, vitestExpect as unknown as DomExpect),
-  renderHook: domRenderHook,
   expect,
   fn,
 };

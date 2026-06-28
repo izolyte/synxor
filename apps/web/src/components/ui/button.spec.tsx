@@ -4,7 +4,8 @@
 // the locator from `selectors`.
 
 import { Button } from "~/components/ui/button";
-import { beforeEach, expect, fn, renderComponent, suite, test } from "~test/kit";
+import { beforeEach, expect, fn, suite, test } from "~test/kit";
+import { renderComponent } from "~test/kit/component";
 import { copy, selectors } from "~test/app";
 
 suite("Button", () => {

@@ -36,15 +36,6 @@ export const runtime: Runtime = {
     pwTest.afterEach(async () => {
       await body();
     }),
-  renderComponent: () => {
-    throw new Error(
-      "renderComponent is Vitest-only. Component isolation has no E2E equivalent — " +
-        "write component specs as *.spec.tsx, or drive the real app via a scenario.",
-    );
-  },
-  renderHook: () => {
-    throw new Error("renderHook is Vitest-only — hooks have no E2E equivalent.");
-  },
   expect,
   fn,
 };

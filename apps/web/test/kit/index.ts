@@ -9,8 +9,6 @@ export const test = runtime.test;
 export const scenario = runtime.scenario;
 export const beforeEach = runtime.beforeEach;
 export const afterEach = runtime.afterEach;
-export const renderComponent = runtime.renderComponent;
-export const renderHook = runtime.renderHook;
 export const expect = runtime.expect;
 export const fn = runtime.fn;
 

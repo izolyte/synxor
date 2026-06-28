@@ -123,17 +123,16 @@ export interface ScenarioContext {
   readonly driver: Driver;
 }
 
-// One adapter per runner; `~test/runtime` resolves to one of these. `scenario`
-// wires the adapter's Driver into a test. `renderComponent`/`renderHook` are
-// component-level and Vitest-only (Playwright throws).
+// One adapter per runner; `~test/runtime` resolves to one of these. Only the
+// runner-swappable surface lives here. Component helpers (renderComponent,
+// renderHook) are jsdom-only and live in ~test/kit/component, off this interface,
+// so the E2E runtime never promises methods it can't provide.
 export interface Runtime {
   suite(name: string, body: () => void): void;
   test(name: string, body: () => unknown | Promise<unknown>): void;
   scenario(name: string, body: (ctx: ScenarioContext) => Promise<void>): void;
   beforeEach(body: () => unknown | Promise<unknown>): void;
   afterEach(body: () => unknown | Promise<unknown>): void;
-  renderComponent(ui: unknown): Screen;
-  renderHook<T>(hook: () => T): HookResult<T>;
   readonly expect: Expect;
   fn<Args extends unknown[] = unknown[], Return = unknown>(
     impl?: (...args: Args) => Return,
