@@ -6,22 +6,37 @@
 import { createVitestDriver } from "~test/kit/adapters/vitest/driver";
 import { expect, suite, test } from "~test/kit";
 import { selectors } from "~test/app";
-import { roomTokenService } from "~/features/room/services/room-token.service";
+import { roomSessionService } from "~/features/room/services/room-session.service";
 
 suite("Join Room flow", () => {
-  test("on success, persists the room token and leaves the page", async () => {
+  test("on success, persists the session and lands on the Room view", async () => {
     const driver = createVitestDriver();
     await driver.backend.rpc("room.join").resolves({ roomToken: "tok-join", roomId: "room-1" });
     await driver.visit("/join");
 
     await driver.find(selectors.joinRoom.input).type("ABC123");
 
-    // Navigation to /room/$roomCode 404s until the Room view ships; the 404 marker
-    // is our "navigated away" anchor and makes the assertion wait for the async
-    // mutation to resolve.
-    await driver.find(selectors.app.notFound).shouldBeVisible();
-    expect(roomTokenService.get("ABC123")).toBe("tok-join");
+    // The Room view's heading is the "navigated away" anchor and lets the async
+    // mutation, navigation, and post-mount session read settle. The Receiver holds
+    // only a token — its join response carries no expiry.
+    await driver.find(selectors.room.heading("ready")).shouldBeVisible();
+    expect(roomSessionService.get("ABC123")).toEqual({ token: "tok-join" });
     await driver.find(selectors.joinRoom.heading).shouldNotExist();
+  });
+
+  test("prefills the Room Code from a shared link's ?code", async () => {
+    const driver = createVitestDriver();
+    await driver.visit("/join?code=ABC123");
+
+    await driver.find(selectors.joinRoom.input).shouldHaveValue("ABC123");
+    await driver.find(selectors.joinRoom.cta).shouldBeEnabled();
+  });
+
+  test("survives a duplicated ?code without crashing, taking the first", async () => {
+    const driver = createVitestDriver();
+    await driver.visit("/join?code=ABC123&code=ZZZ999");
+
+    await driver.find(selectors.joinRoom.input).shouldHaveValue("ABC123");
   });
 
   test("on a rejected code, shows the inline error and stays on the page", async () => {

@@ -10,8 +10,9 @@ suite("trpc contract inference", () => {
     const output: RouterOutputs["room"]["create"] = {
       roomCode: "ABC123",
       roomToken: "token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
     };
-    expect(Object.keys(output)).toEqual(["roomCode", "roomToken"]);
+    expect(Object.keys(output)).toEqual(["roomCode", "roomToken", "expiresAt"]);
   });
 
   test("room.join input is inferred from the backend router", () => {

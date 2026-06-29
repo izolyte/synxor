@@ -1,6 +1,6 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
-import { roomTokenService } from "~/features/room/services/room-token.service";
+import { roomSessionService } from "~/features/room/services/room-session.service";
 import type { Expiry } from "~/features/room/types/expiry";
 
 // Bound to the home route in routes/index.tsx; lets the hook read route context
@@ -17,11 +17,11 @@ export function useCreateRoom() {
 
   const mutation = useMutation(
     trpc.room.create.mutationOptions({
-      onSuccess: ({ roomCode, roomToken }) => {
-        // Persist the Room Token before navigating; the Room view reads it back by
-        // code, so the secret never travels in the URL.
-        roomTokenService.store(roomCode, roomToken);
-        // @ts-expect-error /room/$roomCode lands in a later issue (Room view route); remove this once its route file exists.
+      onSuccess: ({ roomCode, roomToken, expiresAt }) => {
+        // Persist the session before navigating; the Room view reads it back by
+        // code, so the secret never travels in the URL and the countdown has its
+        // expiry on reload.
+        roomSessionService.store(roomCode, { token: roomToken, expiresAt });
         navigate({ to: "/room/$roomCode", params: { roomCode } });
       },
     }),

@@ -1,18 +1,11 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId } from "react";
 import { Button } from "~/shared/ui/button";
+import { FieldError } from "~/shared/components/FieldError";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "~/shared/ui/input-otp";
 import { cn } from "~/shared/utils/cn";
 import { ROOM_CODE_LENGTH } from "~/features/room/constants/room-code";
+import { useRoomCodeEntry } from "~/features/room/hooks/useRoomCodeEntry";
 import type { JoinError } from "~/features/room/types/join-error";
-
-// Codes are 6 upper-case alphanumerics. Strip non-alphanumerics and keep the last
-// six, so a paste survives stray spaces, punctuation, or a copied ".../room/ABC123"
-// tail (which collapses to "ROOMABC123" → "ABC123").
-const sanitize = (raw: string) =>
-  raw
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toUpperCase()
-    .slice(-ROOM_CODE_LENGTH);
 
 const ERROR_COPY: Record<JoinError, string> = {
   rejected: "Room not found or expired.",
@@ -20,9 +13,9 @@ const ERROR_COPY: Record<JoinError, string> = {
 };
 
 /**
- * The Join Room form: owns the Room Code entry, auto-submits once it's complete,
- * and surfaces the pending and error states. Joining itself is the caller's
- * concern (onJoin); onErrorClear lets the caller drop a stale failure on edit.
+ * The Join Room form: a six-cell Room Code field that auto-submits when complete,
+ * with pending and error states. Entry logic (sanitize, completeness, submit latch,
+ * rejected-code reset) lives in useRoomCodeEntry; this stays presentational.
  */
 export function JoinRoomForm({
   onJoin,
@@ -30,6 +23,7 @@ export function JoinRoomForm({
   error,
   onErrorClear,
   hintId,
+  initialCode,
 }: {
   onJoin: (roomCode: string) => void;
   pending: boolean;
@@ -37,52 +31,26 @@ export function JoinRoomForm({
   onErrorClear: () => void;
   /** id of the visible hint, so the field is described by it (and the error, when shown). */
   hintId?: string;
+  /** Prefill from a shared link's ?code; sanitized like any other entry. */
+  initialCode?: string;
 }) {
-  const [code, setCode] = useState("");
-  const [shaking, setShaking] = useState(false);
   const errorId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const submitLockRef = useRef(false);
-  const complete = code.length === ROOM_CODE_LENGTH;
-
-  // A rejected code clears the cells, shakes the row (the OTP convention for "try
-  // again"), and returns focus, so the next attempt is a straight retype. A network
-  // failure keeps the code — nothing's wrong with it — so the user just retries.
-  useEffect(() => {
-    if (error !== "rejected") return;
-    setCode("");
-    setShaking(true);
-    inputRef.current?.focus();
-  }, [error]);
-
-  // Release the submit latch once the attempt settles: pending falls back to false
-  // on failure; a success navigates away and unmounts.
-  useEffect(() => {
-    if (!pending) submitLockRef.current = false;
-  }, [pending]);
-
-  const submit = (value: string) => {
-    // onComplete and an Enter / click can both fire on the sixth character within
-    // the same tick — before `pending` re-renders — so latch synchronously. The
-    // disabled CTA and `pending` are the slower UI guards.
-    if (pending || submitLockRef.current) return;
-    submitLockRef.current = true;
-    onJoin(value);
-  };
+  const { code, complete, shaking, inputRef, change, completeWith, submitCurrent, endShake } =
+    useRoomCodeEntry({ pending, error, initialCode, onJoin, onErrorClear });
 
   return (
     <form
       className="flex flex-col gap-6"
       onSubmit={(event) => {
         event.preventDefault();
-        if (complete) submit(code);
+        submitCurrent();
       }}
     >
       <div
         data-shake={shaking || undefined}
         onAnimationEnd={(event) => {
           // Only the row's own shake resets the flag — ignore child animations.
-          if (event.target === event.currentTarget) setShaking(false);
+          if (event.target === event.currentTarget) endShake();
         }}
         className="relative mx-auto w-full max-w-[20rem] motion-safe:data-[shake=true]:animate-[otp-shake_320ms_var(--ease-out)]"
       >
@@ -90,15 +58,8 @@ export function JoinRoomForm({
           ref={inputRef}
           maxLength={ROOM_CODE_LENGTH}
           value={code}
-          onChange={(next) => {
-            // Drop a stale error the moment a new attempt begins.
-            if (error) onErrorClear();
-            setCode(sanitize(next));
-          }}
-          onComplete={(next) => {
-            const value = sanitize(next);
-            if (value.length === ROOM_CODE_LENGTH) submit(value);
-          }}
+          onChange={change}
+          onComplete={completeWith}
           inputMode="text"
           autoComplete="off"
           autoCapitalize="characters"
@@ -142,15 +103,10 @@ export function JoinRoomForm({
         Join Room
       </Button>
 
-      {/* --color-error-text is theme-split, so it meets AA contrast in both themes. */}
       {error && (
-        <p
-          id={errorId}
-          role="alert"
-          className="animate-[message-in_var(--duration-normal)_var(--ease-out)] text-center text-[var(--color-error-text)] text-xs"
-        >
+        <FieldError id={errorId} className="text-center">
           {ERROR_COPY[error]}
-        </p>
+        </FieldError>
       )}
     </form>
   );
