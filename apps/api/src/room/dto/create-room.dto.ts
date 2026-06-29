@@ -14,4 +14,5 @@ export type CreateRoomRequest = z.infer<typeof createRoomSchema>;
 export interface CreateRoomResult {
   roomCode: string;
   roomToken: string;
+  expiresAt: string;
 }
