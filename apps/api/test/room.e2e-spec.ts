@@ -57,11 +57,15 @@ describe('Room API (e2e)', () => {
         .send({ expiry: '1h' })
         .expect(200);
 
-      const { roomCode, roomToken } = trpcResult(
-        z.object({ roomCode: z.string(), roomToken: z.string() }),
+      const { roomCode, roomToken, expiresAt } = trpcResult(
+        z.object({ roomCode: z.string(), roomToken: z.string(), expiresAt: z.string() }),
       ).parse(res.body).result.data;
       expect(roomCode).toMatch(ROOM_CODE_PATTERN);
       expect(roomToken.split('.')).toHaveLength(3); // header.payload.signature
+      // ISO 8601 string (no tRPC transformer), parseable and in the future.
+      const expiresMs = new Date(expiresAt).getTime();
+      expect(Number.isNaN(expiresMs)).toBe(false);
+      expect(expiresMs).toBeGreaterThan(Date.now());
     });
 
     it('rejects an unknown expiry with 400', async () => {

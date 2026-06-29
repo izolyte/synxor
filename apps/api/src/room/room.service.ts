@@ -30,8 +30,11 @@ export class RoomService {
     const room = await this.createRoomWithUniqueCode(expiresAt);
 
     try {
-      const roomToken = this.tokenIssuer.sign({ roomId: room.id, role: TokenRole.Sender }, expiresAt);
-      return { roomCode: room.code, roomToken };
+      const roomToken = this.tokenIssuer.sign(
+        { roomId: room.id, role: TokenRole.Sender },
+        expiresAt,
+      );
+      return { roomCode: room.code, roomToken, expiresAt: room.expiresAt.toISOString() };
     } catch (err) {
       // Token signing failed after persistence — drop the orphan so a retry
       // doesn't leave an unreachable Room sitting until Expiry. Surface a cleanup

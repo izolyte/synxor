@@ -143,6 +143,13 @@ describe('RoomService.create', () => {
       expect(expiresMs).toBeGreaterThanOrEqual(before + ms);
       expect(expiresMs).toBeLessThanOrEqual(after + ms + CLOCK_TOLERANCE_MS);
     });
+
+    it('returns expiresAt as the Room expiry in ISO 8601', async () => {
+      const { service, repo } = setup(['EXPAT1']);
+      const result = await service.create('1h');
+      const room = repo.stored.get('EXPAT1')!;
+      expect(result.expiresAt).toBe(room.expiresAt.toISOString());
+    });
   });
 });
 

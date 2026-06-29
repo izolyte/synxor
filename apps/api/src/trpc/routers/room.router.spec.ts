@@ -5,7 +5,11 @@ import { RoomExpiredError, RoomNotFoundError } from '../../domain/room/room.erro
 
 function setup() {
   const roomService = {
-    create: jest.fn().mockResolvedValue({ roomCode: 'ABC123', roomToken: 'tok' }),
+    create: jest.fn().mockResolvedValue({
+      roomCode: 'ABC123',
+      roomToken: 'tok',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    }),
     join: jest.fn().mockResolvedValue({ roomToken: 'tok', roomId: 'room-1' }),
   };
   const roomRouter = new RoomRouter(roomService as unknown as RoomService);
@@ -18,7 +22,11 @@ describe('RoomRouter', () => {
     const { roomService, caller } = setup();
     const result = await caller.create({ expiry: '1h' });
     expect(roomService.create).toHaveBeenCalledWith('1h');
-    expect(result).toEqual({ roomCode: 'ABC123', roomToken: 'tok' });
+    expect(result).toEqual({
+      roomCode: 'ABC123',
+      roomToken: 'tok',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
   });
 
   it('rejects an invalid expiry before reaching the service', async () => {
