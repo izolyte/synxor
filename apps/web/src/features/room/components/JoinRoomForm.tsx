@@ -5,9 +5,14 @@ import { cn } from "~/shared/utils/cn";
 import { ROOM_CODE_LENGTH } from "~/features/room/constants/room-code";
 import type { JoinError } from "~/features/room/types/join-error";
 
-// Codes are 6 upper-case alphanumerics. Sanitizing (not just a pattern guard) lets
-// a paste survive stray spaces, punctuation, or a copied ".../room/ABC123" tail.
-const sanitize = (raw: string) => raw.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+// Codes are 6 upper-case alphanumerics. Strip non-alphanumerics and keep the last
+// six, so a paste survives stray spaces, punctuation, or a copied ".../room/ABC123"
+// tail (which collapses to "ROOMABC123" → "ABC123").
+const sanitize = (raw: string) =>
+  raw
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase()
+    .slice(-ROOM_CODE_LENGTH);
 
 const ERROR_COPY: Record<JoinError, string> = {
   rejected: "Room not found or expired.",
@@ -37,6 +42,7 @@ export function JoinRoomForm({
   const [shaking, setShaking] = useState(false);
   const errorId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const submitLockRef = useRef(false);
   const complete = code.length === ROOM_CODE_LENGTH;
 
   // A rejected code clears the cells, shakes the row (the OTP convention for "try
@@ -49,10 +55,18 @@ export function JoinRoomForm({
     inputRef.current?.focus();
   }, [error]);
 
+  // Release the submit latch once the attempt settles: pending falls back to false
+  // on failure; a success navigates away and unmounts.
+  useEffect(() => {
+    if (!pending) submitLockRef.current = false;
+  }, [pending]);
+
   const submit = (value: string) => {
-    // Guard re-entrant submits: onComplete and an Enter / click can both land on
-    // the sixth character. The disabled CTA is only a UI guard.
-    if (pending) return;
+    // onComplete and an Enter / click can both fire on the sixth character within
+    // the same tick — before `pending` re-renders — so latch synchronously. The
+    // disabled CTA and `pending` are the slower UI guards.
+    if (pending || submitLockRef.current) return;
+    submitLockRef.current = true;
     onJoin(value);
   };
 

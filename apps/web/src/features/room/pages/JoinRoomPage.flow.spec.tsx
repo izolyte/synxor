@@ -24,16 +24,27 @@ suite("Join Room flow", () => {
     await driver.find(selectors.joinRoom.heading).shouldNotExist();
   });
 
-  test("on failure, shows an error and stays on the page", async () => {
+  test("on a rejected code, shows the inline error and stays on the page", async () => {
     const driver = createVitestDriver();
-    // The backend currently surfaces unknown/expired Rooms as a generic failure;
-    // the UI treats any error the same — one inline "not found or expired" message.
-    await driver.backend.rpc("room.join").rejects({ code: "INTERNAL_SERVER_ERROR" });
+    // Not-found / expired Rooms come back as NOT_FOUND.
+    await driver.backend.rpc("room.join").rejects({ code: "NOT_FOUND" });
     await driver.visit("/join");
 
     await driver.find(selectors.joinRoom.input).type("ZZ9999");
 
     await driver.find(selectors.joinRoom.error("rejected")).shouldBeVisible();
+    await driver.find(selectors.joinRoom.heading).shouldBeVisible();
+  });
+
+  test("on a server fault, shows the retry message and stays on the page", async () => {
+    const driver = createVitestDriver();
+    // A 5xx is not the code's fault — surface the retryable connection message.
+    await driver.backend.rpc("room.join").rejects({ code: "INTERNAL_SERVER_ERROR" });
+    await driver.visit("/join");
+
+    await driver.find(selectors.joinRoom.input).type("ZZ9999");
+
+    await driver.find(selectors.joinRoom.error("network")).shouldBeVisible();
     await driver.find(selectors.joinRoom.heading).shouldBeVisible();
   });
 });

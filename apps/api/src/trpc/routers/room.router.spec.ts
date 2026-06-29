@@ -1,6 +1,7 @@
 import { RoomRouter } from './room.router';
 import { t } from '../trpc';
 import type { RoomService } from '../../room/room.service';
+import { RoomExpiredError, RoomNotFoundError } from '../../domain/room/room.errors';
 
 function setup() {
   const roomService = {
@@ -37,5 +38,17 @@ describe('RoomRouter', () => {
     const { roomService, caller } = setup();
     await expect(caller.join({ roomCode: 'nope' })).rejects.toThrow();
     expect(roomService.join).not.toHaveBeenCalled();
+  });
+
+  it('maps a missing Room to a NOT_FOUND tRPC error', async () => {
+    const { roomService, caller } = setup();
+    roomService.join.mockRejectedValueOnce(new RoomNotFoundError('AB3X7Z'));
+    await expect(caller.join({ roomCode: 'AB3X7Z' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('maps an expired Room to a NOT_FOUND tRPC error', async () => {
+    const { roomService, caller } = setup();
+    roomService.join.mockRejectedValueOnce(new RoomExpiredError('AB3X7Z'));
+    await expect(caller.join({ roomCode: 'AB3X7Z' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

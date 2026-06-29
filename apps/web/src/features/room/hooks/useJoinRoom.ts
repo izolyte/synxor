@@ -37,10 +37,15 @@ export function useJoinRoom() {
   };
 }
 
-// A tRPC error carrying no structured data never reached the server (offline, DNS,
-// timeout); surface that as retryable rather than blaming the code. Anything the
-// server actually answered (a 4xx/5xx with data) is a rejected code.
+// Only a code the server explicitly refused — not found or expired (NOT_FOUND), or
+// malformed (BAD_REQUEST) — is a "rejected" code worth retyping. Everything else —
+// a transport failure with no data, a 5xx, a rate limit — is retryable, so the
+// classifier returns "network" and the form preserves the typed code.
+const REJECTED_CODES = new Set(["NOT_FOUND", "BAD_REQUEST"]);
+
 function classifyJoinError(error: unknown): JoinError {
-  if (error instanceof TRPCClientError && error.data == null) return "network";
-  return "rejected";
+  if (error instanceof TRPCClientError && REJECTED_CODES.has(error.data?.code ?? "")) {
+    return "rejected";
+  }
+  return "network";
 }
