@@ -24,6 +24,16 @@ export const copy = {
     cta: "Create Room",
     error: "Couldn't create the Room. Try again.",
   },
+  joinRoom: {
+    heading: "Join Room",
+    hint: "Enter the code from the sender.",
+    codeLabel: "Room Code",
+    cta: "Join Room",
+    error: {
+      rejected: "Room not found or expired.",
+      network: "Couldn't reach the server. Check your connection and try again.",
+    },
+  },
 } as const;
 
 export const selectors = {
@@ -42,6 +52,22 @@ export const selectors = {
     expiryOption: (key: keyof typeof copy.createRoom.expiry) =>
       ({ role: "radio", name: copy.createRoom.expiry[key] }) as const satisfies ActionableSelector,
     error: { text: copy.createRoom.error } as const satisfies ReadonlySelector,
+  },
+  joinRoom: {
+    heading: {
+      role: "heading",
+      name: copy.joinRoom.heading,
+    } as const satisfies ActionableSelector,
+    input: {
+      role: "textbox",
+      name: copy.joinRoom.codeLabel,
+    } as const satisfies ActionableSelector,
+    cta: {
+      role: "button",
+      name: copy.joinRoom.cta,
+    } as const satisfies ActionableSelector,
+    error: (kind: keyof typeof copy.joinRoom.error) =>
+      ({ text: copy.joinRoom.error[kind] }) as const satisfies ReadonlySelector,
   },
 };
 
