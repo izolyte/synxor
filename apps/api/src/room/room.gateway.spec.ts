@@ -1,4 +1,4 @@
-import { type INestApplication } from '@nestjs/common';
+import { type INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { io, type Socket } from 'socket.io-client';
@@ -172,5 +172,105 @@ describe('RoomGateway', () => {
 
     const payload = await left;
     expect(payload).toEqual({ receiverCount: 0 });
+  });
+
+  it('emits room:left with the remaining count when one of several Receivers leaves', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('rx1-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+    fakeVerifier.register('rx2-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+
+    const rx1 = open('rx1-tok');
+    await waitFor(sender, 'room:joined');
+
+    const secondJoined = waitFor(sender, 'room:joined');
+    open('rx2-tok');
+    await secondJoined;
+
+    const left = waitFor(sender, 'room:left');
+    rx1.disconnect();
+
+    expect(await left).toEqual({ receiverCount: 1 });
+  });
+
+  it('does not emit room:left when the Sender disconnects', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+
+    const joined = waitFor(sender, 'room:joined');
+    const receiver = open('receiver-tok');
+    await joined;
+
+    // The Receiver watches for room:left; the Sender leaving must not trigger it.
+    const left = waitFor(receiver, 'room:left');
+    sender.disconnect();
+    await new Promise((r) => setTimeout(r, 50));
+
+    await expect(Promise.race([left, Promise.resolve('none')])).resolves.toBe('none');
+    expect(receiver.connected).toBe(true);
+  });
+
+  // ── Room isolation ────────────────────────────────────────────────────────
+
+  it('does not leak room:joined to a Sender watching a different room', async () => {
+    fakeVerifier.register('sender-a', { roomId: 'room-A', role: TokenRole.Sender });
+    fakeVerifier.register('sender-b', { roomId: 'room-B', role: TokenRole.Sender });
+    fakeVerifier.register('rx-a', { roomId: 'room-A', role: TokenRole.Receiver });
+
+    const senderA = open('sender-a');
+    await waitFor(senderA, 'connect');
+    const senderB = open('sender-b');
+    await waitFor(senderB, 'connect');
+
+    const aJoined = waitFor(senderA, 'room:joined');
+    const bJoined = waitFor(senderB, 'room:joined');
+    open('rx-a');
+
+    // room-A's Sender is notified; room-B's Sender hears nothing.
+    expect(await aJoined).toEqual({ receiverCount: 1 });
+    await expect(Promise.race([bJoined, Promise.resolve('none')])).resolves.toBe('none');
+  });
+
+  // ── Resilience ──────────────────────────────────────────────────────────────
+
+  it('keeps the connection alive and emits no room:left when recording the leave fails', async () => {
+    class FailingRepo extends InMemoryParticipantRepository {
+      setDisconnected(): Promise<never> {
+        return Promise.reject(new Error('db unavailable'));
+      }
+    }
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const verifier = new FakeTokenVerifier();
+    verifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    verifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const ctx = await startApp(verifier, new FailingRepo());
+    try {
+      const sender = connect(ctx.port, 'sender-tok');
+      sockets.push(sender);
+      sender.connect();
+      await waitFor(sender, 'connect');
+
+      const receiver = connect(ctx.port, 'receiver-tok');
+      sockets.push(receiver);
+      receiver.connect();
+      await waitFor(sender, 'room:joined');
+
+      const left = waitFor(sender, 'room:left');
+      receiver.disconnect();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await expect(Promise.race([left, Promise.resolve('none')])).resolves.toBe('none');
+      expect(sender.connected).toBe(true);
+      expect(errorSpy).toHaveBeenCalled();
+    } finally {
+      await ctx.app.close();
+      errorSpy.mockRestore();
+    }
   });
 });

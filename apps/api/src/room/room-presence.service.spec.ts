@@ -59,4 +59,20 @@ describe('RoomPresenceService', () => {
     expect(receiverCount).toBe(0);
     expect(participants.stored.get(participantId)?.disconnectedAt).not.toBeNull();
   });
+
+  it('returns the count of the Receivers still connected when one of several leaves', async () => {
+    await presence.recordJoin({ roomId: 'room-1', role: 'RECEIVER', tokenHash: 'rx-1' });
+    const { participantId } = await presence.recordJoin({
+      roomId: 'room-1',
+      role: 'RECEIVER',
+      tokenHash: 'rx-2',
+    });
+
+    const { receiverCount } = await presence.recordLeave({
+      participantId,
+      roomId: 'room-1',
+    });
+
+    expect(receiverCount).toBe(1);
+  });
 });
