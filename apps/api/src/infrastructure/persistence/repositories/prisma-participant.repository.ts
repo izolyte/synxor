@@ -36,8 +36,10 @@ export class PrismaParticipantRepository implements ParticipantRepository {
     return this.toEntity(p);
   }
 
-  async countConnected(roomId: string): Promise<number> {
-    return this.prisma.participant.count({ where: { roomId, disconnectedAt: null } });
+  countConnected(roomId: string, role?: ParticipantRole): Promise<number> {
+    return this.prisma.participant.count({
+      where: { roomId, disconnectedAt: null, ...(role ? { role } : {}) },
+    });
   }
 
   private toEntity(p: PrismaParticipant): Participant {
