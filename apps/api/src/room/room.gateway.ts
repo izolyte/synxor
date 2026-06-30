@@ -29,19 +29,29 @@ export class RoomGateway implements OnGatewayConnection {
   ) {}
 
   async handleConnection(socket: Socket): Promise<void> {
-    const token = socket.handshake.auth['token'] as string | undefined;
-
-    let claims: TokenClaims;
+    let auth: { token: string; claims: TokenClaims };
     try {
-      if (!token) throw new Error('no token');
-      claims = this.tokenVerifier.verify(token);
+      auth = this.authenticate(socket);
     } catch {
       socket.disconnect(true);
       return;
     }
+    await this.onParticipantJoined(socket, auth.token, auth.claims);
+  }
 
+  private authenticate(socket: Socket): { token: string; claims: TokenClaims } {
+    const token = socket.handshake.auth['token'] as string | undefined;
+    if (!token) throw new Error('no token');
+    return { token, claims: this.tokenVerifier.verify(token) };
+  }
+
+  private async onParticipantJoined(
+    socket: Socket,
+    token: string,
+    claims: TokenClaims,
+  ): Promise<void> {
     const { roomId, role } = claims;
-    const participantRole: ParticipantRole = role === TokenRole.Sender ? 'SENDER' : 'RECEIVER';
+    const participantRole = toParticipantRole(role);
 
     const participant = await this.participants.create({
       roomId,
@@ -58,8 +68,8 @@ export class RoomGateway implements OnGatewayConnection {
     }
 
     // 'disconnecting' fires while the socket is still in its rooms — before
-    // Socket.io calls leaveAll(). We capture the namespace here so the async
-    // cleanup below can still broadcast to the room after leaveAll() runs.
+    // Socket.io calls leaveAll(). Cache nsp so async cleanup can still broadcast
+    // to the room after leaveAll() completes.
     const nsp: Namespace = socket.nsp;
     socket.on('disconnecting', () => void this.onParticipantLeft(nsp, socket.id));
   }
@@ -81,6 +91,10 @@ export class RoomGateway implements OnGatewayConnection {
       nsp.to(info.roomId).emit('room:left', { receiverCount });
     }
   }
+}
+
+function toParticipantRole(role: TokenRole): ParticipantRole {
+  return role === TokenRole.Sender ? 'SENDER' : 'RECEIVER';
 }
 
 function hashToken(token: string): string {
