@@ -46,7 +46,7 @@ export function RoomShareView({
         description="Share the Room Code or link to invite a Receiver."
       />
 
-      <RoomCode code={roomCode} />
+      <RoomCode code={roomCode} receiverCount={receiverCount} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <CopyButton

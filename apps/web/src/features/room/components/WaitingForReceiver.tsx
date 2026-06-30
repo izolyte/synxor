@@ -1,11 +1,17 @@
 import type { RoomSocketStatus } from "~/features/room/hooks/useRoomSocket";
 
+const ROW = "text-muted-foreground flex items-center justify-center gap-2 text-sm";
+
 /**
  * Sender-side Room presence. With no Receiver yet it reads "Waiting for Receiver";
  * once one or more connect it switches to a live count. A dropped socket reads
  * "Reconnecting…" rather than lying that a Receiver is still there (or flipping
  * straight back to waiting on a transient blip) — socket.io re-emits presence once
  * it's back. A dot plus a label — the status is never carried by colour alone.
+ *
+ * role="status" makes the line a polite live region: presence flips arrive async
+ * over the socket, so a Sender on a screen reader hears "Receiver connected" /
+ * "Reconnecting…" announced instead of the change passing silently.
  */
 export function WaitingForReceiver({
   status,
@@ -16,7 +22,7 @@ export function WaitingForReceiver({
 }) {
   if (status === "disconnected") {
     return (
-      <p className="text-muted-foreground flex items-center justify-center gap-2 text-sm">
+      <p role="status" className={ROW}>
         <span aria-hidden="true" className="size-3 rounded-full bg-[var(--color-room-empty)]" />
         Reconnecting…
       </p>
@@ -32,7 +38,7 @@ export function WaitingForReceiver({
       : `${receiverCount} Receivers connected`;
 
   return (
-    <p className="text-muted-foreground flex items-center justify-center gap-2 text-sm">
+    <p role="status" className={ROW}>
       <span aria-hidden="true" className={`size-3 rounded-full bg-[var(${color})]`} />
       {label}
     </p>
