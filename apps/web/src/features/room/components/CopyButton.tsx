@@ -12,12 +12,14 @@ export function CopyButton({
   label,
   copiedLabel,
   errorLabel,
+  fallbackText,
   variant,
 }: {
   value: string;
   label: string;
   copiedLabel: string;
   errorLabel: string;
+  fallbackText?: string;
   variant?: ButtonProps["variant"];
 }) {
   const { status, copy } = useClipboard();
@@ -41,6 +43,11 @@ export function CopyButton({
             className="inline-block motion-safe:animate-[message-in_var(--duration-fast)_var(--ease-out)]"
           >
             {status === "copied" ? copiedLabel : errorLabel}
+          </span>
+        )}
+        {status === "error" && fallbackText && (
+          <span className="mt-0.5 block select-all break-all font-mono">
+            {fallbackText}
           </span>
         )}
       </span>

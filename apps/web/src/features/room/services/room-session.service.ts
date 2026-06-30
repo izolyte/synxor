@@ -36,10 +36,12 @@ export class RoomSessionService {
       const parsed: unknown = JSON.parse(raw);
       // Tolerate anything stale or hand-tampered in storage: only a shape with a
       // token string is a session; everything else reads as "none held".
+      const p = parsed as Record<string, unknown>;
       if (
         typeof parsed === "object" &&
         parsed !== null &&
-        typeof (parsed as RoomSession).token === "string"
+        typeof p.token === "string" &&
+        (p.expiresAt === undefined || typeof p.expiresAt === "string")
       ) {
         return parsed as RoomSession;
       }
@@ -70,7 +72,7 @@ function defaultStorage(): RoomSessionStorage {
     return {
       getItem: (key) => {
         try {
-          return storage.getItem(key);
+          return storage.getItem(key) ?? fallback.getItem(key);
         } catch {
           return fallback.getItem(key);
         }

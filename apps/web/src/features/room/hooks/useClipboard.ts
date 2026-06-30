@@ -13,10 +13,19 @@ const COPIED_RESET_MS = 2000;
 export function useClipboard(): { status: CopyStatus; copy: (text: string) => void } {
   const [status, setStatus] = useState<CopyStatus>("idle");
   const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const requestId = useRef(0);
+  const mounted = useRef(false);
 
-  useEffect(() => () => clearTimeout(resetTimer.current), []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      clearTimeout(resetTimer.current);
+    };
+  }, []);
 
   const copy = useCallback((text: string) => {
+    const id = ++requestId.current;
     clearTimeout(resetTimer.current);
     const clipboard = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
     if (!clipboard?.writeText) {
@@ -25,10 +34,16 @@ export function useClipboard(): { status: CopyStatus; copy: (text: string) => vo
     }
     clipboard.writeText(text).then(
       () => {
+        if (!mounted.current || id !== requestId.current) return;
         setStatus("copied");
-        resetTimer.current = setTimeout(() => setStatus("idle"), COPIED_RESET_MS);
+        resetTimer.current = setTimeout(() => {
+          if (mounted.current && id === requestId.current) setStatus("idle");
+        }, COPIED_RESET_MS);
       },
-      () => setStatus("error"),
+      () => {
+        if (!mounted.current || id !== requestId.current) return;
+        setStatus("error");
+      },
     );
   }, []);
 

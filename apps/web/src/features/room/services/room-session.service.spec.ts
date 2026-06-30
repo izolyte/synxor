@@ -46,8 +46,13 @@ suite("RoomSessionService", () => {
     const storage = fakeStorage();
     storage.setItem("synxor.room.BAD123.session", "not json");
     storage.setItem("synxor.room.OLD123.session", JSON.stringify({ noToken: true }));
+    storage.setItem(
+      "synxor.room.TAMPER123.session",
+      JSON.stringify({ token: "tok-1", expiresAt: 123 }),
+    );
     const service = new RoomSessionService(storage);
     expect(service.get("BAD123")).toBe(null);
     expect(service.get("OLD123")).toBe(null);
+    expect(service.get("TAMPER123")).toBe(null);
   });
 });

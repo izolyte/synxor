@@ -55,7 +55,8 @@ export function RoomShareView({
           value={joinUrl}
           label="Copy link"
           copiedLabel="Link copied"
-          errorLabel="Couldn't copy the link. Try again."
+          errorLabel="Couldn't copy the link — select it manually:"
+          fallbackText={joinUrl}
           variant="outline"
         />
       </div>

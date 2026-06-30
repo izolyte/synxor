@@ -21,7 +21,12 @@ export function useRoomCodeEntry({
   onJoin: (code: string) => void;
   onErrorClear: () => void;
 }) {
-  const [code, setCode] = useState(() => sanitizeRoomCode(initialCode));
+  const sanitizedInitialCode = sanitizeRoomCode(initialCode);
+  const [code, setCode] = useState(sanitizedInitialCode);
+
+  useEffect(() => {
+    setCode(sanitizedInitialCode);
+  }, [sanitizedInitialCode]);
   const [shaking, setShaking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const submitLockRef = useRef(false);
