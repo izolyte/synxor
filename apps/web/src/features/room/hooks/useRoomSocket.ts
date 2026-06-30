@@ -41,11 +41,22 @@ export function useRoomSocket(
     setState({ status: "connecting", receiverCount: 0 });
     const socket = factory(token);
 
-    const onCount = (payload: RoomPresencePayload) =>
-      setState((prev) => ({ ...prev, receiverCount: payload.receiverCount }));
+    // Trust nothing off the wire: a malformed or missing count (protocol drift, a
+    // bad server build) coerces to 0 rather than rendering "NaN Receivers".
+    const onCount = (payload: RoomPresencePayload) => {
+      const next = Number(payload?.receiverCount);
+      const count = Number.isFinite(next) && next > 0 ? Math.trunc(next) : 0;
+      setState((prev) => ({ ...prev, receiverCount: count }));
+    };
+
+    const onDown = () => setState((prev) => ({ ...prev, status: "disconnected" }));
 
     socket.on("connect", () => setState((prev) => ({ ...prev, status: "connected" })));
-    socket.on("disconnect", () => setState((prev) => ({ ...prev, status: "disconnected" })));
+    socket.on("disconnect", onDown);
+    // A handshake that never lands (server down, websocket blocked by a proxy, a
+    // rejected token) would otherwise sit at "connecting" forever, showing a false
+    // "Waiting for Receiver". Treat it as disconnected so the UI reads "Reconnecting…".
+    socket.on("connect_error", onDown);
     socket.on(RoomEvent.Joined, onCount);
     socket.on(RoomEvent.Left, onCount);
 

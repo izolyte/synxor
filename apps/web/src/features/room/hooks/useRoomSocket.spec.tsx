@@ -36,7 +36,9 @@ function Harness({ token, socket }: { token: string | undefined; socket: FakeSoc
       <output data-testid="count">{receiverCount}</output>
       <button onClick={() => socket.emit("connect")}>connect</button>
       <button onClick={() => socket.emit("disconnect")}>drop</button>
+      <button onClick={() => socket.emit("connect_error")}>fail</button>
       <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: 1 })}>join</button>
+      <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: "x" })}>garbage</button>
       <button onClick={() => socket.emit(RoomEvent.Left, { receiverCount: 0 })}>leave</button>
     </>
   );
@@ -75,5 +77,19 @@ suite("useRoomSocket", () => {
 
     await screen.find({ testId: "status" }).shouldHaveText("disconnected");
     await screen.find({ testId: "count" }).shouldHaveText("1");
+  });
+
+  test("treats a failed handshake as disconnected, not a stuck 'connecting'", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "fail" }).click();
+    await screen.find({ testId: "status" }).shouldHaveText("disconnected");
+  });
+
+  test("coerces a malformed count to 0 instead of rendering NaN", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "garbage" }).click();
+    await screen.find({ testId: "count" }).shouldHaveText("0");
   });
 });
