@@ -1,6 +1,6 @@
 import type { RoomSocketStatus } from "~/features/room/hooks/useRoomSocket";
 
-const ROW = "text-muted-foreground flex items-center justify-center gap-2 text-sm";
+const ROW = "flex items-center justify-center gap-2 text-sm";
 
 /**
  * Sender-side Room presence. With no Receiver yet it reads "Waiting for Receiver";
@@ -8,6 +8,10 @@ const ROW = "text-muted-foreground flex items-center justify-center gap-2 text-s
  * "Reconnecting…" rather than lying that a Receiver is still there (or flipping
  * straight back to waiting on a transient blip) — socket.io re-emits presence once
  * it's back. A dot plus a label — the status is never carried by colour alone.
+ *
+ * A connected Receiver reads in full-contrast ink; waiting and reconnecting stay
+ * muted, in step with the ambient countdown beside them. The Room "feels different"
+ * once someone's there (PRODUCT) — the line gains weight, not just a colour swap.
  *
  * role="status" makes the line a polite live region: presence flips arrive async
  * over the socket, so a Sender on a screen reader hears "Receiver connected" /
@@ -22,7 +26,7 @@ export function WaitingForReceiver({
 }) {
   if (status === "disconnected") {
     return (
-      <p role="status" className={ROW}>
+      <p role="status" className={`${ROW} text-muted-foreground`}>
         <span aria-hidden="true" className="size-3 rounded-full bg-[var(--color-room-empty)]" />
         Reconnecting…
       </p>
@@ -38,7 +42,7 @@ export function WaitingForReceiver({
       : `${receiverCount} Receivers connected`;
 
   return (
-    <p role="status" className={ROW}>
+    <p role="status" className={`${ROW} ${present ? "text-foreground" : "text-muted-foreground"}`}>
       <span aria-hidden="true" className={`size-3 rounded-full bg-[var(${color})]`} />
       {label}
     </p>
