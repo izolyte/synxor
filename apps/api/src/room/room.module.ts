@@ -3,10 +3,11 @@ import { PersistenceModule } from '../infrastructure/persistence/persistence.mod
 import { SecurityModule } from '../infrastructure/security/security.module';
 import { RoomService } from './room.service';
 import { RoomGateway } from './room.gateway';
+import { RoomPresenceService } from './room-presence.service';
 
 @Module({
   imports: [PersistenceModule, SecurityModule],
-  providers: [RoomService, RoomGateway],
+  providers: [RoomService, RoomPresenceService, RoomGateway],
   exports: [RoomService],
 })
 export class RoomModule {}

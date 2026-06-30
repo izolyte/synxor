@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { io, type Socket } from 'socket.io-client';
 import { RoomGateway } from './room.gateway';
+import { RoomPresenceService } from './room-presence.service';
 import { PARTICIPANT_REPOSITORY } from '../domain/participant/participant.repository';
 import { TOKEN_VERIFIER } from '../domain/security/token-verifier';
 import { TokenRole, type TokenClaims } from '../domain/security/token-issuer';
@@ -47,6 +48,7 @@ async function startApp(
   const module = await Test.createTestingModule({
     providers: [
       RoomGateway,
+      RoomPresenceService,
       { provide: TOKEN_VERIFIER, useValue: fakeVerifier },
       { provide: PARTICIPANT_REPOSITORY, useValue: fakeParticipants },
     ],
