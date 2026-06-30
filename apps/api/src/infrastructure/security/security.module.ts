@@ -3,8 +3,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { CODE_GENERATOR } from '../../domain/security/code-generator';
 import { TOKEN_ISSUER } from '../../domain/security/token-issuer';
+import { TOKEN_VERIFIER } from '../../domain/security/token-verifier';
 import { CryptoCodeGenerator } from './crypto-code-generator';
 import { JwtTokenIssuer } from './jwt-token-issuer';
+import { JwtTokenVerifier } from './jwt-token-verifier';
 import { JWT_ALGORITHM, JWT_SECRET_ENV, JWT_SECRET_MIN_BYTES } from './security.constants';
 
 @Module({
@@ -23,7 +25,8 @@ import { JWT_ALGORITHM, JWT_SECRET_ENV, JWT_SECRET_MIN_BYTES } from './security.
   providers: [
     { provide: CODE_GENERATOR, useClass: CryptoCodeGenerator },
     { provide: TOKEN_ISSUER, useClass: JwtTokenIssuer },
+    { provide: TOKEN_VERIFIER, useClass: JwtTokenVerifier },
   ],
-  exports: [CODE_GENERATOR, TOKEN_ISSUER],
+  exports: [CODE_GENERATOR, TOKEN_ISSUER, TOKEN_VERIFIER],
 })
 export class SecurityModule {}
