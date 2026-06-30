@@ -4,9 +4,16 @@
 
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
 import { server } from "./backend";
+
+// The Room view opens a Socket.io connection from useRoomSocket on mount. Specs
+// assert presence behavior with an injected fake; this global stub just stops the
+// default factory from dialing a real server (which MSW would flag as unhandled).
+vi.mock("socket.io-client", () => ({
+  io: () => ({ on() {}, off() {}, disconnect() {}, connected: false }),
+}));
 
 // jsdom has no layout engine; TanStack Router's scroll restoration calls
 // window.scrollTo, which jsdom otherwise logs as "Not implemented".

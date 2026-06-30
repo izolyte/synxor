@@ -5,6 +5,7 @@ import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
+import { useRoomSocket } from "~/features/room/hooks/useRoomSocket";
 import { buildUrl } from "~/shared/utils/url";
 
 /**
@@ -18,11 +19,14 @@ import { buildUrl } from "~/shared/utils/url";
 export function RoomShareView({
   roomCode,
   expiresAt,
+  token,
 }: {
   roomCode: string;
   expiresAt: string | undefined;
+  token?: string;
 }) {
   const countdown = useCountdown(expiresAt);
+  const { status, receiverCount } = useRoomSocket(token);
 
   if (countdown?.phase === "expired") {
     return (
@@ -64,7 +68,7 @@ export function RoomShareView({
       {/* Ambient status, grouped tighter than the action rhythm above it. */}
       <div className="flex flex-col gap-2">
         {countdown && <CountdownLine label={countdown.label} phase={countdown.phase} />}
-        <WaitingForReceiver />
+        <WaitingForReceiver status={status} receiverCount={receiverCount} />
       </div>
     </>
   );
