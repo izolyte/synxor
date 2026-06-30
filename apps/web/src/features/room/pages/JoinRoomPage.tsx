@@ -1,8 +1,12 @@
 import { useId } from "react";
+import { getRouteApi } from "@tanstack/react-router";
 import { CenteredScreen } from "~/shared/components/CenteredScreen";
-import { Wordmark } from "~/shared/components/Wordmark";
+import { ScreenColumn } from "~/shared/components/ScreenColumn";
+import { ScreenHeader } from "~/shared/components/ScreenHeader";
 import { JoinRoomForm } from "~/features/room/components/JoinRoomForm";
 import { useJoinRoom } from "~/features/room/hooks/useJoinRoom";
+
+const route = getRouteApi("/join");
 
 /**
  * Receiver-facing page: composes the brand header and the Join Room form, wiring
@@ -10,21 +14,18 @@ import { useJoinRoom } from "~/features/room/hooks/useJoinRoom";
  */
 export function JoinRoomPage() {
   const { join, isPending, error, reset } = useJoinRoom();
+  const { code } = route.useSearch();
   // Owned here so the visible hint and the field's aria-describedby share one id.
   const hintId = useId();
 
   return (
     <CenteredScreen>
-      <div className="flex w-full max-w-[var(--width-narrow)] flex-col gap-8">
-        <header className="flex flex-col gap-2">
-          <Wordmark>synxor</Wordmark>
-          <h1 className="text-foreground text-3xl font-bold tracking-[var(--tracking-tight)]">
-            Join Room
-          </h1>
-          <p id={hintId} className="text-muted-foreground text-sm">
-            Enter the code from the sender.
-          </p>
-        </header>
+      <ScreenColumn>
+        <ScreenHeader
+          title="Join Room"
+          description="Enter the code from the sender."
+          descriptionId={hintId}
+        />
 
         <JoinRoomForm
           onJoin={join}
@@ -32,8 +33,9 @@ export function JoinRoomPage() {
           error={error}
           onErrorClear={reset}
           hintId={hintId}
+          initialCode={code}
         />
-      </div>
+      </ScreenColumn>
     </CenteredScreen>
   );
 }

@@ -1,5 +1,6 @@
 import { CenteredScreen } from "~/shared/components/CenteredScreen";
-import { Wordmark } from "~/shared/components/Wordmark";
+import { ScreenColumn } from "~/shared/components/ScreenColumn";
+import { ScreenHeader } from "~/shared/components/ScreenHeader";
 import { CreateRoomForm } from "~/features/room/components/CreateRoomForm";
 import { useCreateRoom } from "~/features/room/hooks/useCreateRoom";
 
@@ -12,16 +13,11 @@ export function CreateRoomPage() {
 
   return (
     <CenteredScreen>
-      <div className="flex w-full max-w-[var(--width-narrow)] flex-col gap-8">
-        <header className="flex flex-col gap-2">
-          <Wordmark>synxor</Wordmark>
-          <h1 className="text-foreground text-3xl font-bold tracking-[var(--tracking-tight)]">
-            New Room
-          </h1>
-        </header>
+      <ScreenColumn>
+        <ScreenHeader title="New Room" />
 
         <CreateRoomForm onCreate={create} pending={isPending} error={isError} />
-      </div>
+      </ScreenColumn>
     </CenteredScreen>
   );
 }

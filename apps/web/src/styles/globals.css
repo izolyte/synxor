@@ -137,6 +137,7 @@
     --color-warning: oklch(0.76 0.12 75);
     --color-warning-subtle: oklch(0.95 0.04 75);
     --color-warning-border: oklch(0.65 0.11 75);
+    --color-warning-text: oklch(0.54 0.12 75); /* warning text on bg — AA in light */
     --color-error: oklch(0.6 0.18 20);
     --color-error-subtle: oklch(0.94 0.04 20);
     --color-error-border: oklch(0.52 0.16 20);
@@ -313,6 +314,7 @@
     --color-warning: oklch(0.76 0.12 75);
     --color-warning-subtle: oklch(0.18 0.05 75);
     --color-warning-border: oklch(0.55 0.11 75);
+    --color-warning-text: oklch(0.8 0.12 75); /* warning text on bg — AA in dark */
     --color-error: oklch(0.65 0.18 20);
     --color-error-subtle: oklch(0.2 0.06 20);
     --color-error-border: oklch(0.45 0.14 20);

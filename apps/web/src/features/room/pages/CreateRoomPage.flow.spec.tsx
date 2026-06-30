@@ -6,7 +6,7 @@
 import { createVitestDriver } from "~test/kit/adapters/vitest/driver";
 import { expect, suite, test } from "~test/kit";
 import { selectors } from "~test/app";
-import { roomTokenService } from "~/features/room/services/room-token.service";
+import { roomSessionService } from "~/features/room/services/room-session.service";
 
 suite("Create Room flow", () => {
   test("selecting an expiry checks it and unchecks the previous", async () => {
@@ -21,20 +21,20 @@ suite("Create Room flow", () => {
       .shouldHaveAttribute("aria-checked", "false");
   });
 
-  test("on success, persists the room token and leaves the page", async () => {
+  test("on success, persists the session and lands on the Room view", async () => {
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const driver = createVitestDriver();
     await driver.backend
       .rpc("room.create")
-      .resolves({ roomCode: "ABC123", roomToken: "tok-success" });
+      .resolves({ roomCode: "ABC123", roomToken: "tok-success", expiresAt });
     await driver.visit("/");
 
     await driver.find(selectors.createRoom.cta).click();
 
-    // Navigation to /room/$roomCode 404s until the Room view ships; the 404 marker
-    // is our "navigated away" anchor and also makes the assertion wait for the
-    // async mutation to resolve.
-    await driver.find(selectors.app.notFound).shouldBeVisible();
-    expect(roomTokenService.get("ABC123")).toBe("tok-success");
+    // The Room view's heading is the "navigated away" anchor, and waiting on it lets
+    // the async mutation, navigation, and the post-mount session read settle.
+    await driver.find(selectors.room.heading("ready")).shouldBeVisible();
+    expect(roomSessionService.get("ABC123")).toEqual({ token: "tok-success", expiresAt });
     await driver.find(selectors.createRoom.heading).shouldNotExist();
   });
 

@@ -34,6 +34,19 @@ export const copy = {
       network: "Couldn't reach the server. Check your connection and try again.",
     },
   },
+  room: {
+    heading: {
+      ready: "Room ready",
+      expired: "Room expired",
+      unavailable: "Room unavailable",
+    },
+    copyCode: "Copy code",
+    copiedCode: "Copied",
+    copyLink: "Copy link",
+    copiedLink: "Link copied",
+    waiting: "Waiting for Receiver",
+    createNew: "Create a new Room",
+  },
 } as const;
 
 export const selectors = {
@@ -68,6 +81,20 @@ export const selectors = {
     } as const satisfies ActionableSelector,
     error: (kind: keyof typeof copy.joinRoom.error) =>
       ({ text: copy.joinRoom.error[kind] }) as const satisfies ReadonlySelector,
+  },
+  room: {
+    heading: (state: keyof typeof copy.room.heading) =>
+      ({ role: "heading", name: copy.room.heading[state] }) as const satisfies ActionableSelector,
+    code: (code: string) => ({ text: code }) as const satisfies ReadonlySelector,
+    copyCode: { role: "button", name: copy.room.copyCode } as const satisfies ActionableSelector,
+    copyLink: { role: "button", name: copy.room.copyLink } as const satisfies ActionableSelector,
+    copiedCode: { text: copy.room.copiedCode } as const satisfies ReadonlySelector,
+    copiedLink: { text: copy.room.copiedLink } as const satisfies ReadonlySelector,
+    waiting: { text: copy.room.waiting } as const satisfies ReadonlySelector,
+    createNew: {
+      role: "link",
+      name: copy.room.createNew,
+    } as const satisfies ActionableSelector,
   },
 };
 

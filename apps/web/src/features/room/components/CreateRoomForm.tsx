@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { Button } from "~/shared/ui/button";
+import { FieldError } from "~/shared/components/FieldError";
 import { ExpiryField } from "~/features/room/components/ExpiryField";
 import { DEFAULT_EXPIRY } from "~/features/room/constants/expiry";
 import type { Expiry } from "~/features/room/types/expiry";
@@ -42,16 +43,7 @@ export function CreateRoomForm({
         Create Room
       </Button>
 
-      {/* --color-error-text is theme-split, so it meets AA contrast in both themes. */}
-      {error && (
-        <p
-          id={errorId}
-          role="alert"
-          className="animate-[message-in_var(--duration-normal)_var(--ease-out)] text-[var(--color-error-text)] text-xs"
-        >
-          Couldn&apos;t create the Room. Try again.
-        </p>
-      )}
+      {error && <FieldError id={errorId}>Couldn&apos;t create the Room. Try again.</FieldError>}
     </form>
   );
 }
