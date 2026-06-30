@@ -53,24 +53,41 @@ export class RoomGateway implements OnGatewayConnection {
     const { roomId, role } = claims;
     const participantRole = toParticipantRole(role);
 
-    const { participantId, receiverCount } = await this.presence.recordJoin({
-      roomId,
-      role: participantRole,
-      tokenHash: hashRoomToken(token),
-    });
+    // 'disconnecting' fires while the socket is still in its rooms — before
+    // Socket.io calls leaveAll(). Register it before the awaits below so a socket
+    // that drops mid-join is still cleaned up, and cache nsp so the async cleanup
+    // can broadcast to the room after leaveAll() completes. onParticipantLeft
+    // keys off `connected`, so it safely no-ops until the join is recorded.
+    const nsp: Namespace = socket.nsp;
+    socket.on('disconnecting', () => void this.onParticipantLeft(nsp, socket.id));
 
-    await socket.join(roomId);
+    let participantId: string;
+    let receiverCount: number;
+    try {
+      ({ participantId, receiverCount } = await this.presence.recordJoin({
+        roomId,
+        role: participantRole,
+        tokenHash: hashRoomToken(token),
+      }));
+      await socket.join(roomId);
+    } catch (err) {
+      this.logger.error(`Failed to record join for Room ${roomId}`, err);
+      socket.disconnect(true);
+      return;
+    }
+
     this.connected.set(socket.id, { participantId, roomId, role: participantRole });
 
     if (participantRole === 'RECEIVER') {
       this.server.to(roomId).emit(RoomEvent.Joined, { receiverCount });
     }
 
-    // 'disconnecting' fires while the socket is still in its rooms — before
-    // Socket.io calls leaveAll(). Cache nsp so async cleanup can still broadcast
-    // to the room after leaveAll() completes.
-    const nsp: Namespace = socket.nsp;
-    socket.on('disconnecting', () => void this.onParticipantLeft(nsp, socket.id));
+    // If the socket dropped during the awaits above, its 'disconnecting' already
+    // fired while `connected` had no entry — reconcile now so the join isn't
+    // orphaned with the Participant left marked connected forever.
+    if (socket.disconnected) {
+      void this.onParticipantLeft(nsp, socket.id);
+    }
   }
 
   private async onParticipantLeft(nsp: Namespace, socketId: string): Promise<void> {

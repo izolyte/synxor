@@ -1,3 +1,5 @@
+import { type Server } from 'http';
+import { type AddressInfo } from 'net';
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
@@ -41,7 +43,7 @@ describe('RoomGateway (e2e, real JWT)', () => {
     app = moduleFixture.createNestApplication();
     app.useWebSocketAdapter(new ConfigurableIoAdapter(app));
     await app.listen(0);
-    port = (app.getHttpServer().address() as { port: number }).port;
+    ({ port } = (app.getHttpServer() as Server).address() as AddressInfo);
     issuer = app.get<TokenIssuer>(TOKEN_ISSUER);
   });
 

@@ -15,7 +15,9 @@ export class ConfigurableIoAdapter extends IoAdapter {
 
   createIOServer(port: number, options?: ServerOptions): unknown {
     const config = this.app.get(ConfigService);
-    const origin = parseAllowedOrigins(config.get<string>(WS_ALLOWED_ORIGINS_ENV));
+    const origin = parseAllowedOrigins(config.get<string>(WS_ALLOWED_ORIGINS_ENV), {
+      production: config.get<string>('NODE_ENV') === 'production',
+    });
     return super.createIOServer(port, { ...options, cors: { origin } });
   }
 }

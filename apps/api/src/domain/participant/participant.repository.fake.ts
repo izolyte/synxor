@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/require-await --
+   Methods are async to satisfy the async ParticipantRepository interface; the
+   in-memory bodies have nothing to await. */
 import type { Participant, CreateParticipantInput, ParticipantRole } from './participant.entity';
 import type { ParticipantRepository } from './participant.repository';
 
@@ -39,9 +42,7 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
   async countConnected(roomId: string, role?: ParticipantRole): Promise<number> {
     return [...this.stored.values()].filter(
       (p) =>
-        p.roomId === roomId &&
-        p.disconnectedAt === null &&
-        (role === undefined || p.role === role),
+        p.roomId === roomId && p.disconnectedAt === null && (role === undefined || p.role === role),
     ).length;
   }
 }

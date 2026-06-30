@@ -1,3 +1,5 @@
+import { type Server } from 'http';
+import { type AddressInfo } from 'net';
 import { type INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { IoAdapter } from '@nestjs/platform-socket.io';
@@ -57,7 +59,7 @@ async function startApp(
   const app = module.createNestApplication();
   app.useWebSocketAdapter(new IoAdapter(app));
   await app.listen(0); // OS-assigned port
-  const port = (app.getHttpServer().address() as { port: number }).port;
+  const { port } = (app.getHttpServer() as Server).address() as AddressInfo;
   return { app, port };
 }
 
@@ -113,7 +115,7 @@ describe('RoomGateway', () => {
     await new Promise((r) => setTimeout(r, 20));
 
     // Should still be pending — no room:joined for Senders.
-    expect(Promise.race([joined, Promise.resolve('pending')])).resolves.toBe('pending');
+    await expect(Promise.race([joined, Promise.resolve('pending')])).resolves.toBe('pending');
     expect(socket.connected).toBe(true);
   });
 

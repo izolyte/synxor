@@ -22,4 +22,17 @@ describe('parseAllowedOrigins', () => {
   it('drops empty entries from a trailing or doubled comma', () => {
     expect(parseAllowedOrigins('https://a.io,,')).toEqual(['https://a.io']);
   });
+
+  it('fails closed instead of defaulting to "*" when unset in production', () => {
+    expect(() => parseAllowedOrigins(undefined, { production: true })).toThrow(
+      /WS_ALLOWED_ORIGINS/,
+    );
+    expect(() => parseAllowedOrigins('   ', { production: true })).toThrow();
+  });
+
+  it('still honours an explicit allowlist in production', () => {
+    expect(parseAllowedOrigins('https://app.synxor.io', { production: true })).toEqual([
+      'https://app.synxor.io',
+    ]);
+  });
 });
