@@ -26,7 +26,8 @@ export function RoomShareView({
   token?: string;
 }) {
   const countdown = useCountdown(expiresAt);
-  const { status, receiverCount } = useRoomSocket(token);
+  const livePresenceToken = countdown?.phase === "expired" ? undefined : token;
+  const { status, receiverCount } = useRoomSocket(livePresenceToken);
 
   if (countdown?.phase === "expired") {
     return (
