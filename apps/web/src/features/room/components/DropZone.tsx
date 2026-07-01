@@ -1,5 +1,6 @@
 import { useCallback, useRef, type ChangeEvent, type KeyboardEvent } from "react";
 import {
+  closestCenter,
   DndContext,
   KeyboardSensor,
   PointerSensor,
@@ -136,7 +137,7 @@ export function DropZone() {
       )}
 
       {files.length > 0 && (
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext
             items={files.map((queued) => queued.id)}
             strategy={verticalListSortingStrategy}

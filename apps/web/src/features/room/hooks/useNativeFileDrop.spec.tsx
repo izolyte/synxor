@@ -6,6 +6,7 @@ import { useNativeFileDrop } from "~/features/room/hooks/useNativeFileDrop";
 
 function dataTransfer(files: File[], { isDirectory = false } = {}) {
   return {
+    types: ["Files"],
     files,
     items: files.map(() => ({
       kind: "file",

@@ -33,6 +33,7 @@ export function useNativeFileDrop({
 
   const onDragEnter = useCallback((event: DragEvent) => {
     event.preventDefault();
+    if (!event.dataTransfer.types?.includes("Files")) return;
     dragDepth.current += 1;
     setDragActive(true);
   }, []);

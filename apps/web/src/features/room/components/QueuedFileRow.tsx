@@ -20,7 +20,15 @@ export function QueuedFileRow({
   queued: QueuedFile;
   onRemove: (id: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: queued.id,
   });
 
@@ -49,6 +57,7 @@ export function QueuedFileRow({
       )}
     >
       <Button
+        ref={setActivatorNodeRef}
         type="button"
         variant="ghost"
         size="icon"

@@ -17,6 +17,7 @@ function file(name: string, size: number, type = "text/plain"): File {
 // component's drop handler, which only reads those two properties.
 function dataTransfer(files: File[], { isDirectory = false } = {}) {
   return {
+    types: ["Files"],
     files,
     items: files.map(() => ({
       kind: "file",
