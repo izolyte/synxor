@@ -22,7 +22,11 @@ export function RoomPage() {
         {session.status === "loading" ? (
           <ScreenHeader title="Room" description="Preparing Room…" />
         ) : session.status === "ready" ? (
-          <RoomShareView roomCode={roomCode} expiresAt={session.session.expiresAt} />
+          <RoomShareView
+            roomCode={roomCode}
+            expiresAt={session.session.expiresAt}
+            token={session.session.token}
+          />
         ) : (
           <RoomNotice
             title="Room unavailable"
