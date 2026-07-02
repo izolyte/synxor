@@ -4,10 +4,16 @@ import { SecurityModule } from '../infrastructure/security/security.module';
 import { RoomService } from './room.service';
 import { RoomGateway } from './room.gateway';
 import { RoomPresenceService } from './room-presence.service';
+import { ROOM_BROADCASTER } from './room-broadcaster';
 
 @Module({
   imports: [PersistenceModule, SecurityModule],
-  providers: [RoomService, RoomPresenceService, RoomGateway],
-  exports: [RoomService],
+  providers: [
+    RoomService,
+    RoomPresenceService,
+    RoomGateway,
+    { provide: ROOM_BROADCASTER, useExisting: RoomGateway },
+  ],
+  exports: [RoomService, ROOM_BROADCASTER],
 })
 export class RoomModule {}
