@@ -1,4 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
+import { forwardRef } from "react";
 import { cn } from "~/shared/utils/cn";
 
 export const buttonVariants = cva(
@@ -47,18 +48,13 @@ export interface ButtonProps
  * @param size - The button size variant to apply.
  * @param loading - When true, overlays a spinner, hides the label, and disables the button.
  */
-export function Button({
-  className,
-  variant,
-  size,
-  loading = false,
-  disabled,
-  type,
-  children,
-  ...props
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { className, variant, size, loading = false, disabled, type, children, ...props },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type ?? "button"}
       aria-busy={loading || undefined}
       disabled={disabled || loading}
@@ -79,4 +75,4 @@ export function Button({
       <span className={cn("inline-flex items-center gap-2", loading && "opacity-0")}>{children}</span>
     </button>
   );
-}
+});

@@ -4,6 +4,7 @@ import { CopyButton } from "~/features/room/components/CopyButton";
 import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
+import { DropZone } from "~/features/room/components/DropZone";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket } from "~/features/room/hooks/useRoomSocket";
 import { buildUrl } from "~/shared/utils/url";
@@ -71,6 +72,8 @@ export function RoomShareView({
         {countdown && <CountdownLine label={countdown.label} phase={countdown.phase} />}
         <WaitingForReceiver status={status} receiverCount={receiverCount} />
       </div>
+
+      <DropZone />
     </>
   );
 }
