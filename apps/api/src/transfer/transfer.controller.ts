@@ -38,7 +38,9 @@ export class TransferController {
   ) {}
 
   @Post('chunk')
-  @UseInterceptors(FileInterceptor('chunk', { limits: { fileSize: CHUNK_SIZE_BYTES } }))
+  // 1 KB of slack: busboy flags a part that hits the limit exactly, and
+  // validateChunk already rejects anything that isn't exactly chunk-sized.
+  @UseInterceptors(FileInterceptor('chunk', { limits: { fileSize: CHUNK_SIZE_BYTES + 1024 } }))
   async uploadChunk(
     @RoomClaims() claims: TokenClaims,
     @UploadedFile() chunk: UploadedChunk | undefined,
