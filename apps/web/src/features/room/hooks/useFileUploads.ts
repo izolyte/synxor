@@ -13,7 +13,7 @@ export type UploadState =
   | { phase: "error"; message: string };
 
 // Test seam; production uses the real chunked uploader.
-type Uploader = (options: UploadFileOptions) => Promise<ChunkUploadResponse>;
+export type Uploader = (options: UploadFileOptions) => Promise<ChunkUploadResponse>;
 
 /**
  * Auto-uploads queued files one at a time, in queue order. Sequential keeps

@@ -27,4 +27,23 @@ suite("RoomShareView", () => {
     await screen.find(selectors.room.copyCode).shouldBeVisible();
     await screen.find(selectors.room.waiting).shouldBeVisible();
   });
+
+  test("a Sender gets the Drop Zone", async () => {
+    const screen = renderComponent(
+      <RoomShareView roomCode="ABC123" expiresAt={undefined} role="sender" />,
+    );
+
+    await screen.find({ testId: "drop-zone" }).shouldBeVisible();
+  });
+
+  test("a Receiver gets the incoming feed instead of the Drop Zone", async () => {
+    const screen = renderComponent(
+      <RoomShareView roomCode="ABC123" expiresAt={undefined} role="receiver" />,
+    );
+
+    await screen
+      .find({ text: "Files the Sender shares will appear here, ready to download." })
+      .shouldBeVisible();
+    await screen.find({ testId: "drop-zone" }).shouldNotExist();
+  });
 });

@@ -5,12 +5,11 @@ import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { DropZone } from "~/features/room/components/DropZone";
-import { IncomingTransferRow } from "~/features/room/components/IncomingTransferRow";
+import { IncomingTransfers } from "~/features/room/components/IncomingTransfers";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket } from "~/features/room/hooks/useRoomSocket";
-import { downloadUrl } from "~/features/room/services/chunk-upload.service";
-import { resolveSocketUrl } from "~/features/room/services/room-socket.service";
 import type { RoomRole } from "~/features/room/services/room-session.service";
+import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import { buildUrl } from "~/shared/utils/url";
 
 /**
@@ -36,7 +35,7 @@ export function RoomShareView({
   const livePresenceToken = countdown?.phase === "expired" ? undefined : token;
   const { status, receiverCount, transfers } = useRoomSocket(livePresenceToken);
   // Same origin the socket rides; only resolved with a live token (client-only).
-  const apiOrigin = livePresenceToken ? resolveSocketUrl(import.meta.env) : undefined;
+  const apiOrigin = livePresenceToken ? resolveApiOrigin(import.meta.env) : undefined;
 
   if (countdown?.phase === "expired") {
     return (
@@ -47,7 +46,7 @@ export function RoomShareView({
     );
   }
 
-  const joinUrl = buildUrl('/join', { code: roomCode });
+  const joinUrl = buildUrl("/join", { code: roomCode });
 
   return (
     <>
@@ -84,42 +83,8 @@ export function RoomShareView({
       {role === "sender" ? (
         <DropZone token={livePresenceToken} apiOrigin={apiOrigin} />
       ) : (
-        <IncomingTransfers
-          transfers={transfers}
-          token={livePresenceToken}
-          apiOrigin={apiOrigin}
-        />
+        <IncomingTransfers transfers={transfers} token={livePresenceToken} apiOrigin={apiOrigin} />
       )}
     </>
-  );
-}
-
-/** Receiver's incoming feed; teaches the surface while it's empty. */
-function IncomingTransfers({
-  transfers,
-  token,
-  apiOrigin,
-}: {
-  transfers: ReturnType<typeof useRoomSocket>["transfers"];
-  token: string | undefined;
-  apiOrigin: string | undefined;
-}) {
-  if (transfers.length === 0 || !token || !apiOrigin) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Files the Sender shares will appear here, ready to download.
-      </p>
-    );
-  }
-  return (
-    <ul role="list" className="flex flex-col gap-1.5">
-      {transfers.map((transfer) => (
-        <IncomingTransferRow
-          key={transfer.transferId}
-          transfer={transfer}
-          downloadHref={downloadUrl(apiOrigin, transfer.transferId, token)}
-        />
-      ))}
-    </ul>
   );
 }
