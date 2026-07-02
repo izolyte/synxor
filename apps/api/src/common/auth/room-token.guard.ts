@@ -20,8 +20,7 @@ export class RoomTokenGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const header = request.headers.authorization;
-    const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined;
+    const token = extractToken(request);
     if (!token) throw new UnauthorizedException('Missing room token');
 
     try {
@@ -34,6 +33,16 @@ export class RoomTokenGuard implements CanActivate {
 }
 
 type RequestWithClaims = Request & { [CLAIMS_KEY]?: TokenClaims };
+
+// Bearer header first; `?token=` second. The query form exists for browser-native
+// download navigations (<a download>), which cannot set headers — the token is
+// Room-scoped and expires with the Room, which bounds what a logged URL leaks.
+function extractToken(request: Request): string | undefined {
+  const header = request.headers.authorization;
+  if (header?.startsWith('Bearer ')) return header.slice('Bearer '.length);
+  const query = (request.query as Record<string, unknown>)?.token;
+  return typeof query === 'string' && query.length > 0 ? query : undefined;
+}
 
 export const RoomClaims = createParamDecorator((_data: unknown, context: ExecutionContext) => {
   const request = context.switchToHttp().getRequest<RequestWithClaims>();

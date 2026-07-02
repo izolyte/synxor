@@ -6,11 +6,14 @@ import { TokenRole, type TokenClaims } from '../../domain/security/token-issuer'
 
 const claims: TokenClaims = { roomId: 'room-1', role: TokenRole.Sender };
 
-function contextFor(authorization?: string): {
+function contextFor(
+  authorization?: string,
+  query: Record<string, unknown> = {},
+): {
   context: ExecutionContext;
   request: Record<string, unknown>;
 } {
-  const request: Record<string, unknown> = { headers: { authorization } };
+  const request: Record<string, unknown> = { headers: { authorization }, query };
   const context = {
     switchToHttp: () => ({ getRequest: () => request }),
   } as unknown as ExecutionContext;
@@ -44,6 +47,17 @@ describe('RoomTokenGuard', () => {
 
   it('rejects a token the verifier refuses', () => {
     const { context } = contextFor('Bearer forged');
+    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+  });
+
+  it('accepts a ?token= query param (browser download navigations)', () => {
+    const { context, request } = contextFor(undefined, { token: 'valid' });
+    expect(guard.canActivate(context)).toBe(true);
+    expect(request['roomTokenClaims']).toEqual(claims);
+  });
+
+  it('prefers the Bearer header over the query param', () => {
+    const { context } = contextFor('Bearer forged', { token: 'valid' });
     expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
   });
 });

@@ -23,7 +23,7 @@ export function useJoinRoom() {
       onSuccess: ({ roomToken }, { roomCode }) => {
         // Receiver holds only the token — the join response carries no expiry, so
         // the session has no countdown source (Sender-only concern).
-        roomSessionService.store(roomCode, { token: roomToken });
+        roomSessionService.store(roomCode, { token: roomToken, role: "receiver" });
         navigate({ to: "/room/$roomCode", params: { roomCode } });
       },
     }),
