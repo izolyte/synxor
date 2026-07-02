@@ -72,7 +72,9 @@ export class TransferDownloadService {
         chunk = await this.storage.getObject(chunkObjectKey(roomId, transferId, chunkIndex));
       } catch {
         // Assembly can delete this chunk object between the session check and
-        // the read; loop back so the session-gone branch takes over.
+        // the read; back off (a bare continue would busy-spin on microtasks and
+        // starve the timers) and loop so the session-gone branch takes over.
+        await sleep(this.options.pollIntervalMs);
         continue;
       }
       yield* chunk;

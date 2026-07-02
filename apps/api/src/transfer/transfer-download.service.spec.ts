@@ -116,6 +116,34 @@ describe('TransferDownloadService', () => {
     await expect(drained).resolves.toEqual(Buffer.concat([first, tail]));
   });
 
+  it('recovers when assembly deletes a chunk object between the session check and the read', async () => {
+    const fileSizeBytes = CHUNK_SIZE_BYTES + 100;
+    const transferId = await seedTransfer(fileSizeBytes);
+    await sessions.create({
+      transferId,
+      roomId,
+      fileName: 'video.mp4',
+      fileSizeBytes,
+      mimeType: 'video/mp4',
+      totalChunks: 2,
+    });
+    // Chunk 0 is marked received but its object is already gone — the reader
+    // must spin on the race branch until the session closes, then take the
+    // assembled object from byte 0.
+    await sessions.markReceived(transferId, 0);
+    const content = Buffer.concat([Buffer.alloc(CHUNK_SIZE_BYTES, 1), Buffer.alloc(100, 2)]);
+
+    const download = await service.open(transferId, roomId);
+    const drained = drain(download.stream);
+
+    setTimeout(() => {
+      storage.objects.set(fileObjectKey(roomId, transferId), content);
+      void sessions.delete(transferId);
+    }, 20);
+
+    await expect(drained).resolves.toEqual(content);
+  });
+
   it('rejects an unknown transfer', async () => {
     await expect(service.open('nope', roomId)).rejects.toThrow(UploadSessionNotFoundError);
   });
