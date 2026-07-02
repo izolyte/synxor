@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Socket } from "socket.io-client";
-import {
-  createRoomSocket,
-  resolveSocketUrl,
-} from "~/features/room/services/room-socket.service";
+import { createRoomSocket } from "~/features/room/services/room-socket.service";
+import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import { RoomEvent, type RoomPresencePayload } from "~/features/room/constants/room-events";
 import { TransferEvent, type TransferProgressPayload } from "~/features/room/constants/transfer";
 
@@ -21,7 +19,7 @@ export interface RoomSocketState {
 type SocketFactory = (token: string) => Socket;
 
 const defaultFactory: SocketFactory = (token) =>
-  createRoomSocket(resolveSocketUrl(import.meta.env), token);
+  createRoomSocket(resolveApiOrigin(import.meta.env), token);
 
 /**
  * Subscribes the Sender to live Receiver presence for the current Room. Connects

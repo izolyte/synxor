@@ -72,13 +72,75 @@ describe("uploadFileInChunks", () => {
     ).rejects.toThrow(/10 Transfers in flight/);
   });
 
+  // One case per branch of the status→message map (mirrors the API's
+  // transfer-error.filter); the copy is what the row shows the user.
+  it.each([
+    [413, /exceeds the size limit/],
+    [401, /no longer valid/],
+    [500, /Check your connection/],
+  ])("status %d reads as its own user-facing message", async (status, message) => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status }));
+    await expect(
+      uploadFileInChunks({ file: fileOfSize(10), token: "tok", apiOrigin: "http://a", fetchFn }),
+    ).rejects.toThrow(message);
+  });
+
+  it("carries the status on the thrown UploadError", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 413 }));
+    const attempt = uploadFileInChunks({
+      file: fileOfSize(10),
+      token: "tok",
+      apiOrigin: "http://a",
+      fetchFn,
+    });
+    await expect(attempt).rejects.toMatchObject({ name: "UploadError", status: 413 });
+  });
+
+  it("sends the file's declared MIME type and metadata with each chunk", async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        okResponse({ transferId: "t1", receivedChunks: 1, totalChunks: 1, complete: true }),
+      );
+    await uploadFileInChunks({
+      file: fileOfSize(10, "video.mp4"),
+      token: "tok",
+      apiOrigin: "http://a",
+      fetchFn,
+    });
+
+    const body = fetchFn.mock.calls[0][1]?.body as FormData;
+    expect(body.get("mimeType")).toBe("video/mp4");
+    expect(body.get("fileName")).toBe("video.mp4");
+    expect(body.get("fileSizeBytes")).toBe("10");
+    expect(body.get("totalChunks")).toBe("1");
+  });
+
+  it("falls back to application/octet-stream when the browser reports no type", async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        okResponse({ transferId: "t1", receivedChunks: 1, totalChunks: 1, complete: true }),
+      );
+    const typeless = new File([new Uint8Array(10)], "mystery.bin", { type: "" });
+    await uploadFileInChunks({ file: typeless, token: "tok", apiOrigin: "http://a", fetchFn });
+
+    const body = fetchFn.mock.calls[0][1]?.body as FormData;
+    expect(body.get("mimeType")).toBe("application/octet-stream");
+  });
+
   it("sends the room token as a Bearer header", async () => {
     const fetchFn = vi
       .fn<typeof fetch>()
       .mockResolvedValue(
         okResponse({ transferId: "t1", receivedChunks: 1, totalChunks: 1, complete: true }),
       );
-    await uploadFileInChunks({ file: fileOfSize(10), token: "tok", apiOrigin: "http://a", fetchFn });
+    await uploadFileInChunks({
+      file: fileOfSize(10),
+      token: "tok",
+      apiOrigin: "http://a",
+      fetchFn,
+    });
     expect(fetchFn.mock.calls[0][1]?.headers).toEqual({ Authorization: "Bearer tok" });
   });
 });

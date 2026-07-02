@@ -17,7 +17,7 @@ import { Upload } from "lucide-react";
 import { QueuedFileRow } from "~/features/room/components/QueuedFileRow";
 import { MAX_FILE_SIZE_BYTES } from "~/features/room/constants/file-queue";
 import { useFileQueue } from "~/features/room/hooks/useFileQueue";
-import { useFileUploads } from "~/features/room/hooks/useFileUploads";
+import { useFileUploads, type Uploader } from "~/features/room/hooks/useFileUploads";
 import { useNativeFileDrop } from "~/features/room/hooks/useNativeFileDrop";
 import { formatFileSize } from "~/features/room/utils/format-file-size";
 import { cn } from "~/shared/utils/cn";
@@ -33,9 +33,18 @@ import { cn } from "~/shared/utils/cn";
  * With a `token` + `apiOrigin`, queued files auto-upload in order (#15); without
  * them (no session yet, tests) the zone stays a local queue.
  */
-export function DropZone({ token, apiOrigin }: { token?: string; apiOrigin?: string }) {
+export function DropZone({
+  token,
+  apiOrigin,
+  uploader,
+}: {
+  token?: string;
+  apiOrigin?: string;
+  /** Test seam; production uses the real chunked uploader. */
+  uploader?: Uploader;
+}) {
   const { files, notice, addFiles, rejectFolder, removeFile, reorderFiles } = useFileQueue();
-  const uploads = useFileUploads(files, token, apiOrigin);
+  const uploads = useFileUploads(files, token, apiOrigin, uploader);
   const inputRef = useRef<HTMLInputElement>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -102,12 +111,12 @@ export function DropZone({ token, apiOrigin }: { token?: string; apiOrigin?: str
             The accessible name comes from whichever span the media query leaves
             visible; a display:none span is excluded from it by spec, so there's
             no separate aria-label to keep in sync. */}
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           <span className="pointer-coarse:hidden">Drop files here or click to browse</span>
           <span className="hidden pointer-coarse:inline">Tap to browse</span>
         </p>
         {files.length > 1 && (
-          <span className="motion-safe:animate-[message-in_var(--duration-fast)_var(--ease-out)] rounded-full bg-[var(--color-primary-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary)]">
+          <span className="rounded-full bg-[var(--color-primary-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary)] motion-safe:animate-[message-in_var(--duration-fast)_var(--ease-out)]">
             {files.length} files
           </span>
         )}
@@ -133,7 +142,7 @@ export function DropZone({ token, apiOrigin }: { token?: string; apiOrigin?: str
           key={notice.message}
           role="status"
           className={cn(
-            "motion-safe:animate-[message-in_var(--duration-fast)_var(--ease-out)] text-sm",
+            "text-sm motion-safe:animate-[message-in_var(--duration-fast)_var(--ease-out)]",
             notice.kind === "error" ? "text-[var(--color-error-text)]" : "text-muted-foreground",
           )}
         >

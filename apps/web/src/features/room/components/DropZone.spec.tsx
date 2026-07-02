@@ -1,8 +1,10 @@
-import { fireEvent, screen as rtlScreen } from "@testing-library/react";
+import { act, fireEvent, screen as rtlScreen } from "@testing-library/react";
 import { expect, vi } from "vitest";
 import { renderComponent } from "~test/kit/component";
 import { suite, test } from "~test/kit";
 import { DropZone } from "~/features/room/components/DropZone";
+import type { Uploader } from "~/features/room/hooks/useFileUploads";
+import type { UploadFileOptions } from "~/features/room/services/chunk-upload.service";
 
 // File.size is normally read-only and derived from real byte content; for a
 // simulated multi-GB file we override it rather than allocate the real bytes.
@@ -115,6 +117,55 @@ suite("DropZone", () => {
     handle.focus();
     expect(handle).toHaveAttribute("tabindex", "0");
     expect(document.activeElement).toBe(handle);
+  });
+
+  // The upload pipeline itself is specced in useFileUploads/chunk-upload.service;
+  // here only the wiring matters: a session makes dropped rows carry live upload
+  // state. The fake uploader parks each call so no network is touched.
+  test("with a session, a dropped file uploads and its row tracks the state", async () => {
+    const pending: Array<{ options: UploadFileOptions; resolve: () => void }> = [];
+    const uploader = (options: UploadFileOptions) =>
+      new Promise<{
+        transferId: string;
+        receivedChunks: number;
+        totalChunks: number;
+        complete: boolean;
+      }>((resolve) => {
+        pending.push({
+          options,
+          resolve: () =>
+            resolve({ transferId: "t1", receivedChunks: 1, totalChunks: 1, complete: true }),
+        });
+      });
+    const screen = renderComponent(
+      <DropZone token="tok" apiOrigin="http://api.test" uploader={uploader} />,
+    );
+
+    fireEvent.drop(rtlScreen.getByTestId("drop-zone"), {
+      dataTransfer: dataTransfer([file("a.txt", 10)]),
+    });
+    await screen.find({ text: "a.txt" }).shouldBeVisible();
+
+    expect(pending.length).toBe(1);
+    expect(pending[0].options.token).toBe("tok");
+
+    act(() => pending[0].options.onProgress?.(50));
+    expect(rtlScreen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
+
+    await act(async () => pending[0].resolve());
+    await screen.find({ text: "Sent" }).shouldBeVisible();
+  });
+
+  test("without a session, queued files stay local — the uploader is never called", async () => {
+    const uploader = vi.fn<Uploader>();
+    const screen = renderComponent(<DropZone uploader={uploader} />);
+
+    fireEvent.drop(rtlScreen.getByTestId("drop-zone"), {
+      dataTransfer: dataTransfer([file("a.txt", 10)]),
+    });
+    await screen.find({ text: "a.txt" }).shouldBeVisible();
+
+    expect(uploader).not.toHaveBeenCalled();
   });
 
   test("removes a queued file", async () => {

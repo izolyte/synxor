@@ -1,5 +1,6 @@
 import {
   RoomSessionService,
+  sessionRole,
   type RoomSessionStorage,
 } from "~/features/room/services/room-session.service";
 import { expect, suite, test } from "~test/kit";
@@ -54,5 +55,42 @@ suite("RoomSessionService", () => {
     expect(service.get("BAD123")).toBe(null);
     expect(service.get("OLD123")).toBe(null);
     expect(service.get("TAMPER123")).toBe(null);
+  });
+
+  test("round-trips the session role", () => {
+    const service = new RoomSessionService(fakeStorage());
+    service.store("ABC123", { token: "tok-1", role: "receiver" });
+    expect(service.get("ABC123")).toEqual({ token: "tok-1", role: "receiver" });
+  });
+
+  test("rejects a session with a role outside the known pair", () => {
+    const storage = fakeStorage();
+    storage.setItem(
+      "synxor.room.ROLE123.session",
+      JSON.stringify({ token: "tok-1", role: "admin" }),
+    );
+    const service = new RoomSessionService(storage);
+    expect(service.get("ROLE123")).toBe(null);
+  });
+});
+
+suite("sessionRole", () => {
+  test("returns the stored role when present", () => {
+    expect(sessionRole({ token: "tok", role: "receiver" })).toBe("receiver");
+    expect(sessionRole({ token: "tok", role: "sender" })).toBe("sender");
+  });
+
+  test("infers Sender from an expiry on a legacy session (no role field)", () => {
+    expect(sessionRole({ token: "tok", expiresAt: "2099-01-01T00:00:00.000Z" })).toBe("sender");
+  });
+
+  test("infers Receiver from a legacy session without an expiry", () => {
+    expect(sessionRole({ token: "tok" })).toBe("receiver");
+  });
+
+  test("prefers an explicit role over the expiry heuristic", () => {
+    expect(
+      sessionRole({ token: "tok", expiresAt: "2099-01-01T00:00:00.000Z", role: "receiver" }),
+    ).toBe("receiver");
   });
 });

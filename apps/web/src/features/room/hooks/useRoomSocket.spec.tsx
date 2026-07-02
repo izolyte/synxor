@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { renderComponent } from "~test/kit/component";
 import { suite, test } from "~test/kit";
 import { useRoomSocket } from "~/features/room/hooks/useRoomSocket";
 import { RoomEvent } from "~/features/room/constants/room-events";
+import { TransferEvent, type TransferProgressPayload } from "~/features/room/constants/transfer";
 
 type Handler = (payload?: unknown) => void;
 
@@ -27,19 +28,51 @@ class FakeSocket {
   }
 }
 
-function Harness({ token, socket }: { token: string | undefined; socket: FakeSocket }) {
+function progress(transferId: string, receivedChunks: number): TransferProgressPayload {
+  return {
+    transferId,
+    fileName: `${transferId}.txt`,
+    fileSizeBytes: 1024,
+    receivedChunks,
+    totalChunks: 2,
+    complete: receivedChunks === 2,
+  };
+}
+
+function Harness({
+  token: initialToken,
+  socket,
+}: {
+  token: string | undefined;
+  socket: FakeSocket;
+}) {
+  // Local so a button can swap the token mid-test (a rejoin gets a new one).
+  const [token, setToken] = useState(initialToken);
   const factory = useMemo(() => () => socket as unknown as Socket, [socket]);
-  const { status, receiverCount } = useRoomSocket(token, factory);
+  const { status, receiverCount, transfers } = useRoomSocket(token, factory);
   return (
     <>
       <output data-testid="status">{status}</output>
       <output data-testid="count">{receiverCount}</output>
+      <output data-testid="transfers">
+        {/* "none" over an empty string: jest-dom rejects toHaveTextContent(""). */}
+        {transfers.length === 0
+          ? "none"
+          : transfers.map((t) => `${t.transferId}:${t.receivedChunks}/${t.totalChunks}`).join(" ")}
+      </output>
       <button onClick={() => socket.emit("connect")}>connect</button>
       <button onClick={() => socket.emit("disconnect")}>drop</button>
       <button onClick={() => socket.emit("connect_error")}>fail</button>
       <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: 1 })}>join</button>
       <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: "x" })}>garbage</button>
       <button onClick={() => socket.emit(RoomEvent.Left, { receiverCount: 0 })}>leave</button>
+      <button onClick={() => socket.emit(TransferEvent.Progress, progress("a", 1))}>send-a1</button>
+      <button onClick={() => socket.emit(TransferEvent.Progress, progress("a", 2))}>send-a2</button>
+      <button onClick={() => socket.emit(TransferEvent.Progress, progress("b", 1))}>send-b1</button>
+      <button onClick={() => socket.emit(TransferEvent.Progress, { fileName: "no-id.txt" })}>
+        send-malformed
+      </button>
+      <button onClick={() => setToken("tok-2")}>retoken</button>
     </>
   );
 }
@@ -91,5 +124,45 @@ suite("useRoomSocket", () => {
 
     await screen.find({ role: "button", name: "garbage" }).click();
     await screen.find({ testId: "count" }).shouldHaveText("0");
+  });
+
+  test("appends a transfer on its first progress event, in arrival order", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "send-a1" }).click();
+    await screen.find({ role: "button", name: "send-b1" }).click();
+
+    await screen.find({ testId: "transfers" }).shouldHaveText("a:1/2 b:1/2");
+  });
+
+  test("upserts progress for a known transfer in place, keeping its position", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "send-a1" }).click();
+    await screen.find({ role: "button", name: "send-b1" }).click();
+    await screen.find({ role: "button", name: "send-a2" }).click();
+
+    await screen.find({ testId: "transfers" }).shouldHaveText("a:2/2 b:1/2");
+  });
+
+  test("drops a malformed progress payload (no transferId) whole", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "send-a1" }).click();
+    await screen.find({ role: "button", name: "send-malformed" }).click();
+
+    await screen.find({ testId: "transfers" }).shouldHaveText("a:1/2");
+  });
+
+  test("resets the transfer feed when the token changes (new session, new Room)", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "send-a1" }).click();
+    await screen.find({ testId: "transfers" }).shouldHaveText("a:1/2");
+
+    await screen.find({ role: "button", name: "retoken" }).click();
+
+    await screen.find({ testId: "transfers" }).shouldHaveText("none");
+    await screen.find({ testId: "status" }).shouldHaveText("connecting");
   });
 });
