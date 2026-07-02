@@ -6,8 +6,6 @@ import {
 
 export const CHUNK_SIZE_BYTES = 256 * 1024;
 
-const DEFAULT_MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
-
 export function chunkCountFor(fileSizeBytes: number): number {
   if (!Number.isFinite(fileSizeBytes) || fileSizeBytes <= 0) {
     throw new RangeError(`fileSizeBytes must be positive, got ${fileSizeBytes}`);
@@ -42,13 +40,4 @@ export function validateChunk({
   if (byteLength !== expectedLength) {
     throw new ChunkSizeMismatchError(chunkIndex, byteLength, expectedLength);
   }
-}
-
-export function resolveMaxFileSizeBytes(envValue: string | undefined): number {
-  if (envValue === undefined) return DEFAULT_MAX_FILE_SIZE_BYTES;
-  const parsed = Number(envValue);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`MAX_FILE_SIZE_BYTES must be a positive integer, got: "${envValue}"`);
-  }
-  return parsed;
 }

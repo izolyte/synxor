@@ -11,6 +11,8 @@ import { FakeTransferRepository } from '../domain/transfer/transfer.repository.f
 import { InMemoryUploadSessionStore } from '../infrastructure/upload-session/in-memory-upload-session.store';
 import { chunkObjectKey, fileObjectKey } from '../domain/transfer/storage-key';
 import { ChunkedUploadService, type AcceptChunkInput } from './chunked-upload.service';
+import { ChunkAssembler } from './chunk-assembler';
+import { TransferProgressNotifier } from './transfer-progress.notifier';
 import { TransferEvent } from './transfer-events';
 import type { RoomBroadcaster } from '../room/room-broadcaster';
 
@@ -35,9 +37,14 @@ describe('ChunkedUploadService', () => {
     transfers = new FakeTransferRepository();
     sessions = new InMemoryUploadSessionStore();
     broadcaster = new FakeBroadcaster();
-    service = new ChunkedUploadService(transfers, storage, sessions, broadcaster, {
-      maxFileSizeBytes: 10 * CHUNK_SIZE_BYTES,
-    });
+    service = new ChunkedUploadService(
+      transfers,
+      storage,
+      sessions,
+      new ChunkAssembler(storage),
+      new TransferProgressNotifier(broadcaster),
+      { maxFileSizeBytes: 10 * CHUNK_SIZE_BYTES },
+    );
   });
 
   function firstChunkInput(overrides: Partial<AcceptChunkInput> = {}): AcceptChunkInput {

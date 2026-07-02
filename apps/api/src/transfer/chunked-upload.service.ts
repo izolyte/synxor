@@ -1,5 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
-import { Readable } from 'stream';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   TRANSFER_REPOSITORY,
   type TransferRepository,
@@ -11,7 +10,7 @@ import {
   type UploadSession,
   type UploadSessionStore,
 } from '../domain/transfer/upload-session';
-import { resolveMaxFileSizeBytes, validateChunk } from '../domain/transfer/chunking';
+import { validateChunk } from '../domain/transfer/chunking';
 import { chunkObjectKey, fileObjectKey } from '../domain/transfer/storage-key';
 import {
   ConcurrentTransferLimitError,
@@ -19,8 +18,9 @@ import {
   UploadRoomMismatchError,
   UploadSessionNotFoundError,
 } from '../domain/transfer/transfer.errors';
-import { ROOM_BROADCASTER, type RoomBroadcaster } from '../room/room-broadcaster';
-import { TransferEvent, type TransferProgressPayload } from './transfer-events';
+import { ChunkAssembler } from './chunk-assembler';
+import { TransferProgressNotifier } from './transfer-progress.notifier';
+import { CHUNKED_UPLOAD_OPTIONS, type ChunkedUploadOptions } from './transfer.options';
 
 export interface AcceptChunkInput {
   roomId: string;
@@ -40,26 +40,15 @@ export interface AcceptChunkResult {
   complete: boolean;
 }
 
-export interface ChunkedUploadOptions {
-  maxFileSizeBytes: number;
-}
-
-export const CHUNKED_UPLOAD_OPTIONS = Symbol('CHUNKED_UPLOAD_OPTIONS');
-
-export function chunkedUploadOptionsFromEnv(): ChunkedUploadOptions {
-  return { maxFileSizeBytes: resolveMaxFileSizeBytes(process.env.MAX_FILE_SIZE_BYTES) };
-}
-
 @Injectable()
 export class ChunkedUploadService {
   constructor(
     @Inject(TRANSFER_REPOSITORY) private readonly transfers: TransferRepository,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(UPLOAD_SESSION_STORE) private readonly sessions: UploadSessionStore,
-    @Inject(ROOM_BROADCASTER) private readonly broadcaster: RoomBroadcaster,
-    @Optional()
-    @Inject(CHUNKED_UPLOAD_OPTIONS)
-    private readonly options: ChunkedUploadOptions = chunkedUploadOptionsFromEnv(),
+    private readonly assembler: ChunkAssembler,
+    private readonly progress: TransferProgressNotifier,
+    @Inject(CHUNKED_UPLOAD_OPTIONS) private readonly options: ChunkedUploadOptions,
   ) {}
 
   async acceptChunk(input: AcceptChunkInput): Promise<AcceptChunkResult> {
@@ -85,16 +74,18 @@ export class ChunkedUploadService {
     const updated = await this.sessions.markReceived(session.transferId, input.chunkIndex);
 
     const complete = updated.receivedChunks.size === updated.totalChunks;
-    if (complete) await this.assemble(updated);
+    if (complete) {
+      await this.assembler.assemble(updated);
+      await this.sessions.delete(updated.transferId);
+    }
 
-    const result: AcceptChunkResult = {
+    this.progress.chunkReceived(updated, updated.receivedChunks.size, complete);
+    return {
       transferId: updated.transferId,
       receivedChunks: updated.receivedChunks.size,
       totalChunks: updated.totalChunks,
       complete,
     };
-    this.broadcastProgress(updated, result);
-    return result;
   }
 
   private async resumeSession(transferId: string, roomId: string): Promise<UploadSession> {
@@ -131,46 +122,5 @@ export class ChunkedUploadService {
       mimeType: input.mimeType,
       totalChunks: input.totalChunks,
     });
-  }
-
-  // Streams chunk objects in order into the final object, so assembly never
-  // holds more than one chunk in memory regardless of file size.
-  private async assemble(session: UploadSession): Promise<void> {
-    const { roomId, transferId, totalChunks } = session;
-    const concatenated = Readable.from(this.readChunksInOrder(session));
-    await this.storage.putObject(
-      fileObjectKey(roomId, transferId),
-      concatenated,
-      session.fileSizeBytes,
-      session.mimeType,
-    );
-
-    await Promise.all(
-      Array.from({ length: totalChunks }, (_, i) =>
-        this.storage.removeObject(chunkObjectKey(roomId, transferId, i)),
-      ),
-    );
-    await this.sessions.delete(transferId);
-  }
-
-  private async *readChunksInOrder(session: UploadSession): AsyncGenerator<Buffer> {
-    for (let i = 0; i < session.totalChunks; i++) {
-      const chunk = await this.storage.getObject(
-        chunkObjectKey(session.roomId, session.transferId, i),
-      );
-      yield* chunk as AsyncIterable<Buffer>;
-    }
-  }
-
-  private broadcastProgress(session: UploadSession, result: AcceptChunkResult): void {
-    const payload: TransferProgressPayload = {
-      transferId: result.transferId,
-      fileName: session.fileName,
-      fileSizeBytes: session.fileSizeBytes,
-      receivedChunks: result.receivedChunks,
-      totalChunks: result.totalChunks,
-      complete: result.complete,
-    };
-    this.broadcaster.emitToRoom(session.roomId, TransferEvent.Progress, payload);
   }
 }

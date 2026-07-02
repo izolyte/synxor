@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Readable } from 'stream';
 import {
   TRANSFER_REPOSITORY,
@@ -12,6 +12,7 @@ import {
   UploadRoomMismatchError,
   UploadSessionNotFoundError,
 } from '../domain/transfer/transfer.errors';
+import { TRANSFER_DOWNLOAD_OPTIONS, type TransferDownloadOptions } from './transfer.options';
 
 export interface TransferDownload {
   fileName: string;
@@ -19,14 +20,6 @@ export interface TransferDownload {
   mimeType: string;
   stream: Readable;
 }
-
-export interface TransferDownloadOptions {
-  pollIntervalMs: number;
-}
-
-export const TRANSFER_DOWNLOAD_OPTIONS = Symbol('TRANSFER_DOWNLOAD_OPTIONS');
-
-const DEFAULT_OPTIONS: TransferDownloadOptions = { pollIntervalMs: 200 };
 
 // Lets a Receiver start pulling a file while the Sender is still uploading it:
 // chunk objects are streamed as they land, and once assembly replaces them the
@@ -37,9 +30,7 @@ export class TransferDownloadService {
     @Inject(TRANSFER_REPOSITORY) private readonly transfers: TransferRepository,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(UPLOAD_SESSION_STORE) private readonly sessions: UploadSessionStore,
-    @Optional()
-    @Inject(TRANSFER_DOWNLOAD_OPTIONS)
-    private readonly options: TransferDownloadOptions = DEFAULT_OPTIONS,
+    @Inject(TRANSFER_DOWNLOAD_OPTIONS) private readonly options: TransferDownloadOptions,
   ) {}
 
   async open(transferId: string, roomId: string): Promise<TransferDownload> {

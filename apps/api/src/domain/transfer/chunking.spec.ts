@@ -1,9 +1,4 @@
-import {
-  CHUNK_SIZE_BYTES,
-  chunkCountFor,
-  resolveMaxFileSizeBytes,
-  validateChunk,
-} from './chunking';
+import { CHUNK_SIZE_BYTES, chunkCountFor, validateChunk } from './chunking';
 import {
   ChunkOutOfRangeError,
   ChunkSizeMismatchError,
@@ -60,20 +55,5 @@ describe('validateChunk', () => {
     expect(() =>
       validateChunk({ fileSizeBytes, totalChunks: 2, chunkIndex: 1, byteLength: 101 }),
     ).toThrow(ChunkSizeMismatchError);
-  });
-});
-
-describe('resolveMaxFileSizeBytes', () => {
-  it('parses the env value', () => {
-    expect(resolveMaxFileSizeBytes('1048576')).toBe(1048576);
-  });
-
-  it('falls back to 5 GB when unset', () => {
-    expect(resolveMaxFileSizeBytes(undefined)).toBe(5 * 1024 * 1024 * 1024);
-  });
-
-  it('rejects a non-numeric or non-positive value', () => {
-    expect(() => resolveMaxFileSizeBytes('abc')).toThrow();
-    expect(() => resolveMaxFileSizeBytes('0')).toThrow();
   });
 });

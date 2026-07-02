@@ -34,6 +34,12 @@ export class RoomTokenGuard implements CanActivate {
 
 type RequestWithClaims = Request & { [CLAIMS_KEY]?: TokenClaims };
 
+// For collaborators (guards, filters) that need the verified claims outside a
+// parameter decorator.
+export function roomClaimsFrom(request: Request): TokenClaims | undefined {
+  return (request as RequestWithClaims)[CLAIMS_KEY];
+}
+
 // Bearer header first; `?token=` second. The query form exists for browser-native
 // download navigations (<a download>), which cannot set headers — the token is
 // Room-scoped and expires with the Room, which bounds what a logged URL leaks.

@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Param,
   Post,
@@ -16,9 +15,11 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { RoomClaims, RoomTokenGuard } from '../common/auth/room-token.guard';
+import { RequireRoomRole, RoomRoleGuard } from '../common/auth/room-role.guard';
+import { ZodValidationPipe } from '../common/validation/zod-validation.pipe';
 import { TokenRole, type TokenClaims } from '../domain/security/token-issuer';
 import { CHUNK_SIZE_BYTES } from '../domain/transfer/chunking';
-import { chunkUploadSchema } from './dto/chunk-upload.dto';
+import { chunkUploadSchema, type ChunkUploadRequest } from './dto/chunk-upload.dto';
 import { ChunkedUploadService, type AcceptChunkResult } from './chunked-upload.service';
 import { TransferDownloadService } from './transfer-download.service';
 import { TransferErrorFilter } from './transfer-error.filter';
@@ -29,7 +30,7 @@ interface UploadedChunk {
 }
 
 @Controller('transfer')
-@UseGuards(RoomTokenGuard)
+@UseGuards(RoomTokenGuard, RoomRoleGuard)
 @UseFilters(TransferErrorFilter)
 export class TransferController {
   constructor(
@@ -38,25 +39,20 @@ export class TransferController {
   ) {}
 
   @Post('chunk')
+  @RequireRoomRole(TokenRole.Sender, 'Only the Sender may upload')
   // 1 KB of slack: busboy flags a part that hits the limit exactly, and
   // validateChunk already rejects anything that isn't exactly chunk-sized.
   @UseInterceptors(FileInterceptor('chunk', { limits: { fileSize: CHUNK_SIZE_BYTES + 1024 } }))
   async uploadChunk(
     @RoomClaims() claims: TokenClaims,
     @UploadedFile() chunk: UploadedChunk | undefined,
-    @Body() body: unknown,
+    @Body(new ZodValidationPipe(chunkUploadSchema)) body: ChunkUploadRequest,
   ): Promise<AcceptChunkResult> {
-    if (claims.role !== TokenRole.Sender) {
-      throw new ForbiddenException('Only the Sender may upload');
-    }
     if (!chunk) throw new BadRequestException('Missing chunk file part');
-
-    const parsed = chunkUploadSchema.safeParse(body);
-    if (!parsed.success) throw new BadRequestException(parsed.error.issues);
 
     return this.uploads.acceptChunk({
       roomId: claims.roomId,
-      ...parsed.data,
+      ...body,
       chunk: chunk.buffer,
     });
   }
