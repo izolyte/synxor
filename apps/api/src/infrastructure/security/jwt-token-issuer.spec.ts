@@ -9,7 +9,10 @@ describe('JwtTokenIssuer', () => {
   const issuer = new JwtTokenIssuer(jwt);
 
   it('signs a verifiable JWT carrying the claims', () => {
-    const token = issuer.sign({ roomId: 'room-1', role: TokenRole.Sender }, new Date(Date.now() + HOUR_MS));
+    const token = issuer.sign(
+      { roomId: 'room-1', role: TokenRole.Sender },
+      new Date(Date.now() + HOUR_MS),
+    );
 
     const payload = jwt.verify<{ roomId: string; role: string }>(token);
     expect(payload.roomId).toBe('room-1');

@@ -7,6 +7,7 @@ import type { ParticipantRole } from '../domain/participant/participant.entity';
 import { hashRoomToken } from '../infrastructure/security/token-hash';
 import { RoomPresenceService } from './room-presence.service';
 import { RoomEvent } from './room-events';
+import type { RoomBroadcaster } from './room-broadcaster';
 
 interface ConnectedParticipant {
   participantId: string;
@@ -17,7 +18,7 @@ interface ConnectedParticipant {
 // CORS for the underlying Socket.io server is configured by ConfigurableIoAdapter
 // at bootstrap, not here — decorator options evaluate at import, before config loads.
 @WebSocketGateway()
-export class RoomGateway implements OnGatewayConnection {
+export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
   @WebSocketServer() private readonly server!: Server;
 
   private readonly logger = new Logger(RoomGateway.name);
@@ -27,6 +28,10 @@ export class RoomGateway implements OnGatewayConnection {
     @Inject(TOKEN_VERIFIER) private readonly tokenVerifier: TokenVerifier,
     private readonly presence: RoomPresenceService,
   ) {}
+
+  emitToRoom(roomId: string, event: string, payload: unknown): void {
+    this.server.to(roomId).emit(event, payload);
+  }
 
   async handleConnection(socket: Socket): Promise<void> {
     let auth: { token: string; claims: TokenClaims };

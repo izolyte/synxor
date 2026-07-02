@@ -20,7 +20,7 @@ suite("Join Room flow", () => {
     // mutation, navigation, and post-mount session read settle. The Receiver holds
     // only a token — its join response carries no expiry.
     await driver.find(selectors.room.heading("ready")).shouldBeVisible();
-    expect(roomSessionService.get("ABC123")).toEqual({ token: "tok-join" });
+    expect(roomSessionService.get("ABC123")).toEqual({ token: "tok-join", role: "receiver" });
     await driver.find(selectors.joinRoom.heading).shouldNotExist();
   });
 

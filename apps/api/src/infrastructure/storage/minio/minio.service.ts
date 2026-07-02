@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Client } from 'minio';
 import type { Readable } from 'stream';
+import type { ObjectStorage } from '../../../domain/storage/object-storage';
 
 function isPermanentError(err: unknown): boolean {
   const code = (err as { code?: string })?.code;
@@ -8,7 +9,7 @@ function isPermanentError(err: unknown): boolean {
 }
 
 @Injectable()
-export class MinioService implements OnModuleInit {
+export class MinioService implements OnModuleInit, ObjectStorage {
   private readonly logger = new Logger(MinioService.name);
   private readonly client: Client;
   private readonly bucket: string;
@@ -70,7 +71,8 @@ export class MinioService implements OnModuleInit {
     await this.client.putObject(this.bucket, key, body, resolvedSize, meta);
   }
 
-  async getObject(key: string): Promise<Readable> {
+  async getObject(key: string, offset = 0): Promise<Readable> {
+    if (offset > 0) return this.client.getPartialObject(this.bucket, key, offset);
     return this.client.getObject(this.bucket, key);
   }
 

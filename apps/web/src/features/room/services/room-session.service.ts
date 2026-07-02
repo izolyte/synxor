@@ -9,11 +9,21 @@ export interface RoomSessionStorage {
   setItem(key: string, value: string): void;
 }
 
+export type RoomRole = "sender" | "receiver";
+
 export interface RoomSession {
   token: string;
   // ISO 8601, Sender only — the Receiver's join response carries no expiry. Absent
   // means no countdown source.
   expiresAt?: string;
+  // Absent in sessions stored before roles existed; sessionRole() falls back to
+  // the expiresAt heuristic for those.
+  role?: RoomRole;
+}
+
+/** The session's role; legacy sessions (no role field) infer Sender from expiry. */
+export function sessionRole(session: RoomSession): RoomRole {
+  return session.role ?? (session.expiresAt ? "sender" : "receiver");
 }
 
 export class RoomSessionService {
@@ -41,7 +51,8 @@ export class RoomSessionService {
         typeof parsed === "object" &&
         parsed !== null &&
         typeof p.token === "string" &&
-        (p.expiresAt === undefined || typeof p.expiresAt === "string")
+        (p.expiresAt === undefined || typeof p.expiresAt === "string") &&
+        (p.role === undefined || p.role === "sender" || p.role === "receiver")
       ) {
         return parsed as RoomSession;
       }

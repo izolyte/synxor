@@ -4,6 +4,7 @@ import { HealthModule } from './health/health.module';
 import { PersistenceModule } from './infrastructure/persistence/persistence.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { TrpcModule } from './trpc/trpc.module';
+import { TransferModule } from './transfer/transfer.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { TrpcModule } from './trpc/trpc.module';
     PersistenceModule,
     StorageModule,
     TrpcModule,
+    TransferModule,
   ],
 })
 export class AppModule {}
