@@ -1,3 +1,4 @@
+import type { Readable } from 'stream';
 import { CHUNK_SIZE_BYTES } from '../domain/transfer/chunking';
 import {
   ConcurrentTransferLimitError,
@@ -113,11 +114,51 @@ describe('ChunkedUploadService', () => {
     );
 
     expect(broadcaster.emitted).toHaveLength(2);
-    expect(broadcaster.emitted[1]).toMatchObject({
+    expect(broadcaster.emitted[1]).toEqual({
       roomId,
       event: TransferEvent.Progress,
-      payload: { transferId, receivedChunks: 2, totalChunks: 2, complete: true },
+      payload: {
+        transferId,
+        fileName: 'video.mp4',
+        fileSizeBytes: CHUNK_SIZE_BYTES + 100,
+        receivedChunks: 2,
+        totalChunks: 2,
+        complete: true,
+      },
     });
+  });
+
+  it('keeps the session and chunks when assembly fails, and skips the broadcast', async () => {
+    // Fails only the final-object write; chunk writes keep working.
+    class ExplodingStorage extends FakeObjectStorage {
+      failKey?: string;
+      putObject(key: string, body: Buffer | Readable): Promise<void> {
+        if (key === this.failKey) return Promise.reject(new Error('minio down'));
+        return super.putObject(key, body);
+      }
+    }
+    const exploding = new ExplodingStorage();
+    const svc = new ChunkedUploadService(
+      transfers,
+      exploding,
+      sessions,
+      new ChunkAssembler(exploding),
+      new TransferProgressNotifier(broadcaster),
+      { maxFileSizeBytes: 10 * CHUNK_SIZE_BYTES },
+    );
+
+    const { transferId } = await svc.acceptChunk(firstChunkInput());
+    exploding.failKey = fileObjectKey(roomId, transferId);
+
+    await expect(
+      svc.acceptChunk(firstChunkInput({ transferId, chunkIndex: 1, chunk: Buffer.alloc(100, 2) })),
+    ).rejects.toThrow('minio down');
+
+    // Nothing was torn down, so the Sender can retry the last chunk.
+    expect(await sessions.get(transferId)).not.toBeNull();
+    expect(exploding.objects.has(chunkObjectKey(roomId, transferId, 0))).toBe(true);
+    expect(exploding.objects.has(chunkObjectKey(roomId, transferId, 1))).toBe(true);
+    expect(broadcaster.emitted).toHaveLength(1);
   });
 
   it('rejects a file over the size limit', async () => {

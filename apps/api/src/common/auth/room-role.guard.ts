@@ -19,10 +19,8 @@ interface RequiredRoomRole {
 
 // The message is per-route so the 403 body can say what the role gates
 // ("Only the Sender may upload"), not just which role was missing.
-export const RequireRoomRole = (
-  role: TokenRole,
-  message: string,
-): ReturnType<typeof SetMetadata> => SetMetadata(REQUIRED_ROOM_ROLE, { role, message });
+export const RequireRoomRole = (role: TokenRole, message: string): ReturnType<typeof SetMetadata> =>
+  SetMetadata(REQUIRED_ROOM_ROLE, { role, message });
 
 // Runs after RoomTokenGuard (list it second in @UseGuards) and reads the claims
 // that guard attached. As a guard rather than a handler check, the role is

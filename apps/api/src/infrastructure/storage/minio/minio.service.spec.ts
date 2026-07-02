@@ -9,6 +9,7 @@ const mockClient = {
   makeBucket: jest.fn(),
   putObject: jest.fn(),
   getObject: jest.fn(),
+  getPartialObject: jest.fn(),
   removeObject: jest.fn(),
 };
 
@@ -148,6 +149,27 @@ describe('MinioService', () => {
 
       expect(mockClient.getObject).toHaveBeenCalledWith('transfers', key);
       expect(stream).toBe(fakeStream);
+    });
+
+    it('getObject with an offset requests a partial object', async () => {
+      const fakeStream = { pipe: jest.fn() };
+      mockClient.getPartialObject.mockResolvedValue(fakeStream);
+
+      const stream = await service.getObject(key, 1024);
+
+      expect(mockClient.getPartialObject).toHaveBeenCalledWith('transfers', key, 1024);
+      expect(mockClient.getObject).not.toHaveBeenCalled();
+      expect(stream).toBe(fakeStream);
+    });
+
+    it('getObject with a zero offset takes the whole-object path', async () => {
+      const fakeStream = { pipe: jest.fn() };
+      mockClient.getObject.mockResolvedValue(fakeStream);
+
+      await service.getObject(key, 0);
+
+      expect(mockClient.getObject).toHaveBeenCalledWith('transfers', key);
+      expect(mockClient.getPartialObject).not.toHaveBeenCalled();
     });
 
     it('removeObject delegates to client', async () => {

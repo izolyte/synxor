@@ -238,6 +238,32 @@ describe('RoomGateway', () => {
     await expect(Promise.race([bJoined, Promise.resolve('none')])).resolves.toBe('none');
   });
 
+  // ── Broadcasting ──────────────────────────────────────────────────────────
+
+  it('emitToRoom reaches every socket in the room and nobody outside it', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+    fakeVerifier.register('outsider-tok', { roomId: 'room-2', role: TokenRole.Sender });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const outsider = open('outsider-tok');
+    await waitFor(outsider, 'connect');
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:joined'); // proves both room-1 joins completed
+
+    const senderGot = waitFor(sender, 'transfer:progress');
+    const receiverGot = waitFor(receiver, 'transfer:progress');
+    const outsiderGot = waitFor(outsider, 'transfer:progress');
+
+    app.get(RoomGateway).emitToRoom('room-1', 'transfer:progress', { receivedChunks: 1 });
+
+    expect(await senderGot).toEqual({ receivedChunks: 1 });
+    expect(await receiverGot).toEqual({ receivedChunks: 1 });
+    await new Promise((r) => setTimeout(r, 50));
+    await expect(Promise.race([outsiderGot, Promise.resolve('none')])).resolves.toBe('none');
+  });
+
   // ── Resilience ──────────────────────────────────────────────────────────────
 
   it('keeps the connection alive and emits no room:left when recording the leave fails', async () => {
