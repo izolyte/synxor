@@ -11,10 +11,13 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       MINIO_ENDPOINT: minio
       MINIO_PORT: "9000"
+      REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     security_opt:
       - no-new-privileges:true
@@ -55,9 +58,22 @@ services:
     networks:
       - synxor
 
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - synxor
+
 volumes:
   postgres_data:
   minio_data:
+  redis_data:
 
 networks:
   synxor:

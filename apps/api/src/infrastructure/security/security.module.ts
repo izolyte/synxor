@@ -7,7 +7,13 @@ import { TOKEN_VERIFIER } from '../../domain/security/token-verifier';
 import { CryptoCodeGenerator } from './crypto-code-generator';
 import { JwtTokenIssuer } from './jwt-token-issuer';
 import { JwtTokenVerifier } from './jwt-token-verifier';
-import { JWT_ALGORITHM, JWT_SECRET_ENV, JWT_SECRET_MIN_BYTES } from './security.constants';
+import {
+  JWT_ALGORITHM,
+  JWT_AUDIENCE,
+  JWT_ISSUER,
+  JWT_SECRET_ENV,
+  JWT_SECRET_MIN_BYTES,
+} from './security.constants';
 
 @Module({
   imports: [
@@ -18,7 +24,10 @@ import { JWT_ALGORITHM, JWT_SECRET_ENV, JWT_SECRET_MIN_BYTES } from './security.
         if (Buffer.byteLength(secret, 'utf8') < JWT_SECRET_MIN_BYTES) {
           throw new Error(`${JWT_SECRET_ENV} must be at least ${JWT_SECRET_MIN_BYTES} bytes`);
         }
-        return { secret, signOptions: { algorithm: JWT_ALGORITHM } };
+        return {
+          secret,
+          signOptions: { algorithm: JWT_ALGORITHM, issuer: JWT_ISSUER, audience: JWT_AUDIENCE },
+        };
       },
     }),
   ],
