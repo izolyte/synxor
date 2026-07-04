@@ -21,7 +21,7 @@ export function useCreateRoom() {
         // Persist the session before navigating; the Room view reads it back by
         // code, so the secret never travels in the URL and the countdown has its
         // expiry on reload.
-        roomSessionService.store(roomCode, { token: roomToken, expiresAt });
+        roomSessionService.store(roomCode, { token: roomToken, expiresAt, role: "sender" });
         navigate({ to: "/room/$roomCode", params: { roomCode } });
       },
     }),

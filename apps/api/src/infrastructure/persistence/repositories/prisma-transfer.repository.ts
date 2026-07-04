@@ -24,7 +24,10 @@ export class PrismaTransferRepository implements TransferRepository {
   }
 
   async findByRoomId(roomId: string): Promise<Transfer[]> {
-    const transfers = await this.prisma.transfer.findMany({ where: { roomId }, orderBy: { createdAt: 'asc' } });
+    const transfers = await this.prisma.transfer.findMany({
+      where: { roomId },
+      orderBy: { createdAt: 'asc' },
+    });
     return transfers.map((t) => this.toEntity(t));
   }
 

@@ -1,7 +1,9 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { File, GripVertical, Image, X } from "lucide-react";
+import { Check, File, GripVertical, Image, X } from "lucide-react";
+import { TransferProgressBar } from "~/features/room/components/TransferProgressBar";
 import type { QueuedFile } from "~/features/room/hooks/useFileQueue";
+import type { UploadState } from "~/features/room/hooks/useFileUploads";
 import { formatFileSize } from "~/features/room/utils/format-file-size";
 import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/utils/cn";
@@ -12,13 +14,20 @@ function FileTypeIcon({ mimeType }: { mimeType: string }) {
   return <Icon aria-hidden="true" size={20} />;
 }
 
-/** One queued file: dnd-kit sortable row (drag handle reorders the send queue). */
+/**
+ * One queued file: dnd-kit sortable row (drag handle reorders the send queue).
+ * `upload` reflects the row's live transfer state — a progress bar while
+ * uploading, a Sent check when done, the failure message when it errors. Status
+ * always pairs icon/text with color, never color alone.
+ */
 export function QueuedFileRow({
   queued,
   onRemove,
+  upload,
 }: {
   queued: QueuedFile;
   onRemove: (id: string) => void;
+  upload?: UploadState;
 }) {
   const {
     attributes,
@@ -69,17 +78,39 @@ export function QueuedFileRow({
         <GripVertical aria-hidden="true" size={16} />
       </Button>
       <FileTypeIcon mimeType={queued.file.type} />
-      <span dir="auto" title={queued.file.name} className="min-w-0 flex-1 truncate">
-        {queued.file.name}
-      </span>
-      <span className="shrink-0 text-xs text-muted-foreground">
-        {formatFileSize(queued.file.size)}
-      </span>
-      {queued.warning && (
-        <span className="shrink-0 text-xs text-[var(--color-warning-text)]">
-          {queued.warning}
-        </span>
-      )}
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <span dir="auto" title={queued.file.name} className="min-w-0 flex-1 truncate">
+            {queued.file.name}
+          </span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {formatFileSize(queued.file.size)}
+          </span>
+          {queued.warning && (
+            <span className="shrink-0 text-xs text-[var(--color-warning-text)]">
+              {queued.warning}
+            </span>
+          )}
+          {upload?.phase === "done" && (
+            <span className="flex shrink-0 items-center gap-1 text-xs text-[var(--color-success)]">
+              <Check aria-hidden="true" size={14} />
+              Sent
+            </span>
+          )}
+        </div>
+        {upload?.phase === "uploading" && (
+          <TransferProgressBar
+            percent={upload.percent}
+            label={`Uploading ${queued.file.name}`}
+            compact
+          />
+        )}
+        {upload?.phase === "error" && (
+          <span role="status" className="text-xs text-[var(--color-error-text)]">
+            {upload.message}
+          </span>
+        )}
+      </div>
       <Button
         type="button"
         variant="ghost"

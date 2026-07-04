@@ -5,8 +5,11 @@ import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { DropZone } from "~/features/room/components/DropZone";
+import { IncomingTransfers } from "~/features/room/components/IncomingTransfers";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket } from "~/features/room/hooks/useRoomSocket";
+import type { RoomRole } from "~/features/room/services/room-session.service";
+import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import { buildUrl } from "~/shared/utils/url";
 
 /**
@@ -21,14 +24,18 @@ export function RoomShareView({
   roomCode,
   expiresAt,
   token,
+  role = "sender",
 }: {
   roomCode: string;
   expiresAt: string | undefined;
   token?: string;
+  role?: RoomRole;
 }) {
   const countdown = useCountdown(expiresAt);
   const livePresenceToken = countdown?.phase === "expired" ? undefined : token;
-  const { status, receiverCount } = useRoomSocket(livePresenceToken);
+  const { status, receiverCount, transfers } = useRoomSocket(livePresenceToken);
+  // Same origin the socket rides; only resolved with a live token (client-only).
+  const apiOrigin = livePresenceToken ? resolveApiOrigin(import.meta.env) : undefined;
 
   if (countdown?.phase === "expired") {
     return (
@@ -39,7 +46,7 @@ export function RoomShareView({
     );
   }
 
-  const joinUrl = buildUrl('/join', { code: roomCode });
+  const joinUrl = buildUrl("/join", { code: roomCode });
 
   return (
     <>
@@ -73,7 +80,11 @@ export function RoomShareView({
         <WaitingForReceiver status={status} receiverCount={receiverCount} />
       </div>
 
-      <DropZone />
+      {role === "sender" ? (
+        <DropZone token={livePresenceToken} apiOrigin={apiOrigin} />
+      ) : (
+        <IncomingTransfers transfers={transfers} token={livePresenceToken} apiOrigin={apiOrigin} />
+      )}
     </>
   );
 }

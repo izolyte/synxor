@@ -18,6 +18,9 @@ export interface FilePayload {
 }
 
 export interface CreateTransferInput {
+  // Callers may pin the id (the upload path reserves it before the DB write so
+  // the room concurrency slot is claimed atomically); omit to let the DB assign.
+  id?: string;
   roomId: string;
   payloadType: PayloadType;
   contentLength: bigint;

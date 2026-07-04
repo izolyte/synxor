@@ -34,7 +34,11 @@ suite("Create Room flow", () => {
     // The Room view's heading is the "navigated away" anchor, and waiting on it lets
     // the async mutation, navigation, and the post-mount session read settle.
     await driver.find(selectors.room.heading("ready")).shouldBeVisible();
-    expect(roomSessionService.get("ABC123")).toEqual({ token: "tok-success", expiresAt });
+    expect(roomSessionService.get("ABC123")).toEqual({
+      token: "tok-success",
+      expiresAt,
+      role: "sender",
+    });
     await driver.find(selectors.createRoom.heading).shouldNotExist();
   });
 

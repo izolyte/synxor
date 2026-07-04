@@ -30,7 +30,8 @@ export class TrpcModule implements OnModuleInit {
         // domain error when there is one so the log says what actually failed.
         onError: ({ path, error }) => {
           const cause = error.cause;
-          const detail = cause instanceof DomainError ? `${cause.name}: ${cause.message}` : error.message;
+          const detail =
+            cause instanceof DomainError ? `${cause.name}: ${cause.message}` : error.message;
           this.logger.error(`tRPC ${path ?? '<no-path>'}: ${detail}`, error.stack);
         },
       }),

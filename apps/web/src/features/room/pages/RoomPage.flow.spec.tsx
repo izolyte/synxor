@@ -59,6 +59,29 @@ suite("Room view", () => {
     await driver.find(selectors.room.createNew).shouldBeVisible();
   });
 
+  test("a Sender session gets the Drop Zone", async () => {
+    roomSessionService.store("SND123", {
+      token: "tok-1",
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      role: "sender",
+    });
+    const driver = createVitestDriver();
+    await driver.visit("/room/SND123");
+
+    await driver.find({ testId: "drop-zone" }).shouldBeVisible();
+  });
+
+  test("a Receiver session gets the incoming feed instead of the Drop Zone", async () => {
+    roomSessionService.store("RCV123", { token: "tok-1", role: "receiver" });
+    const driver = createVitestDriver();
+    await driver.visit("/room/RCV123");
+
+    await driver
+      .find({ text: "Files the Sender shares will appear here, ready to download." })
+      .shouldBeVisible();
+    await driver.find({ testId: "drop-zone" }).shouldNotExist();
+  });
+
   test("without a held session, points back to creating a Room", async () => {
     const driver = createVitestDriver();
     await driver.visit("/room/NOPE12");

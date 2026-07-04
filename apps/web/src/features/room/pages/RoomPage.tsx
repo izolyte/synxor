@@ -5,6 +5,7 @@ import { ScreenHeader } from "~/shared/components/ScreenHeader";
 import { RoomShareView } from "~/features/room/components/RoomShareView";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { useRoomSession } from "~/features/room/hooks/useRoomSession";
+import { sessionRole } from "~/features/room/services/room-session.service";
 
 const route = getRouteApi("/room/$roomCode");
 
@@ -26,6 +27,7 @@ export function RoomPage() {
             roomCode={roomCode}
             expiresAt={session.session.expiresAt}
             token={session.session.token}
+            role={sessionRole(session.session)}
           />
         ) : (
           <RoomNotice

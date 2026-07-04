@@ -17,6 +17,7 @@ import { Upload } from "lucide-react";
 import { QueuedFileRow } from "~/features/room/components/QueuedFileRow";
 import { MAX_FILE_SIZE_BYTES } from "~/features/room/constants/file-queue";
 import { useFileQueue } from "~/features/room/hooks/useFileQueue";
+import { useFileUploads, type Uploader } from "~/features/room/hooks/useFileUploads";
 import { useNativeFileDrop } from "~/features/room/hooks/useNativeFileDrop";
 import { formatFileSize } from "~/features/room/utils/format-file-size";
 import { cn } from "~/shared/utils/cn";
@@ -28,9 +29,22 @@ import { cn } from "~/shared/utils/cn";
  * endpoint. Two separate drag systems, deliberately: incoming files ride the
  * native HTML5 DataTransfer API (dnd-kit only drags DOM elements, not OS
  * filesystem entries), while reordering the already-queued list is dnd-kit's job.
+ *
+ * With a `token` + `apiOrigin`, queued files auto-upload in order (#15); without
+ * them (no session yet, tests) the zone stays a local queue.
  */
-export function DropZone() {
+export function DropZone({
+  token,
+  apiOrigin,
+  uploader,
+}: {
+  token?: string;
+  apiOrigin?: string;
+  /** Test seam; production uses the real chunked uploader. */
+  uploader?: Uploader;
+}) {
   const { files, notice, addFiles, rejectFolder, removeFile, reorderFiles } = useFileQueue();
+  const uploads = useFileUploads(files, token, apiOrigin, uploader);
   const inputRef = useRef<HTMLInputElement>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -97,12 +111,12 @@ export function DropZone() {
             The accessible name comes from whichever span the media query leaves
             visible; a display:none span is excluded from it by spec, so there's
             no separate aria-label to keep in sync. */}
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           <span className="pointer-coarse:hidden">Drop files here or click to browse</span>
           <span className="hidden pointer-coarse:inline">Tap to browse</span>
         </p>
         {files.length > 1 && (
-          <span className="motion-safe:animate-[message-in_var(--duration-fast)_var(--ease-out)] rounded-full bg-[var(--color-primary-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary)]">
+          <span className="rounded-full bg-[var(--color-primary-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary)] motion-safe:animate-[message-in_var(--duration-fast)_var(--ease-out)]">
             {files.length} files
           </span>
         )}
@@ -128,7 +142,7 @@ export function DropZone() {
           key={notice.message}
           role="status"
           className={cn(
-            "motion-safe:animate-[message-in_var(--duration-fast)_var(--ease-out)] text-sm",
+            "text-sm motion-safe:animate-[message-in_var(--duration-fast)_var(--ease-out)]",
             notice.kind === "error" ? "text-[var(--color-error-text)]" : "text-muted-foreground",
           )}
         >
@@ -144,7 +158,12 @@ export function DropZone() {
           >
             <ul role="list" className="flex flex-col gap-1.5">
               {files.map((queued) => (
-                <QueuedFileRow key={queued.id} queued={queued} onRemove={removeFile} />
+                <QueuedFileRow
+                  key={queued.id}
+                  queued={queued}
+                  onRemove={removeFile}
+                  upload={uploads.get(queued.id)}
+                />
               ))}
             </ul>
           </SortableContext>
