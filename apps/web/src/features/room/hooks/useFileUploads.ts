@@ -32,11 +32,16 @@ export function useFileUploads(
   const activeRef = useRef<{ id: string; controller: AbortController } | null>(null);
   const startedRef = useRef<Set<string>>(new Set());
 
-  // Abort the in-flight upload when its row is removed from the queue.
+  // React to rows leaving the queue: abort an in-flight upload, and forget the
+  // row's "started" mark so re-adding the same file (same id) uploads again.
   useEffect(() => {
+    const present = new Set(files.map((queued) => queued.id));
+
     const active = activeRef.current;
-    if (active && !files.some((queued) => queued.id === active.id)) {
-      active.controller.abort();
+    if (active && !present.has(active.id)) active.controller.abort();
+
+    for (const id of startedRef.current) {
+      if (!present.has(id)) startedRef.current.delete(id);
     }
   }, [files]);
 

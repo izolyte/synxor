@@ -47,6 +47,13 @@ suite("IncomingTransferRow", () => {
     expect(rtlScreen.queryByRole("progressbar")).toBeNull();
   });
 
+  test("shows 0% instead of NaN when no chunks are counted yet", () => {
+    renderComponent(row(transfer({ receivedChunks: 0, totalChunks: 0 })));
+
+    const bar = rtlScreen.getByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "0");
+  });
+
   test("links a native streamed download from the first chunk", async () => {
     const screen = renderComponent(row(transfer()));
 

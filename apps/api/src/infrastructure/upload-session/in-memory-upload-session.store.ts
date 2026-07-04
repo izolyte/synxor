@@ -14,7 +14,15 @@ interface MutableSession extends Omit<UploadSession, 'receivedChunks'> {
 export class InMemoryUploadSessionStore implements UploadSessionStore {
   private readonly sessions = new Map<string, MutableSession>();
 
-  create(input: CreateUploadSessionInput): Promise<UploadSession> {
+  reserve(input: CreateUploadSessionInput, maxPerRoom: number): Promise<UploadSession | null> {
+    // Synchronous count-then-set with no await in between — that is what makes
+    // the cap safe against concurrent opens on a single-threaded event loop.
+    let active = 0;
+    for (const session of this.sessions.values()) {
+      if (session.roomId === input.roomId) active++;
+    }
+    if (active >= maxPerRoom) return Promise.resolve(null);
+
     const session: MutableSession = { ...input, receivedChunks: new Set() };
     this.sessions.set(input.transferId, session);
     return Promise.resolve(snapshot(session));
@@ -35,14 +43,6 @@ export class InMemoryUploadSessionStore implements UploadSessionStore {
   delete(transferId: string): Promise<void> {
     this.sessions.delete(transferId);
     return Promise.resolve();
-  }
-
-  countByRoom(roomId: string): Promise<number> {
-    let count = 0;
-    for (const session of this.sessions.values()) {
-      if (session.roomId === roomId) count++;
-    }
-    return Promise.resolve(count);
   }
 }
 

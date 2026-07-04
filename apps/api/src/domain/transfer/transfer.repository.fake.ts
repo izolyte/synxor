@@ -13,7 +13,7 @@ export class FakeTransferRepository implements TransferRepository {
 
   create(input: CreateTransferInput): Promise<Transfer> {
     const transfer: Transfer = {
-      id: `transfer-${++this.seq}`,
+      id: input.id ?? `transfer-${++this.seq}`,
       roomId: input.roomId,
       payloadType: input.payloadType,
       contentLength: input.contentLength,

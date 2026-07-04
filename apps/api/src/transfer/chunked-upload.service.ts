@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import {
   TRANSFER_REPOSITORY,
   type TransferRepository,
@@ -52,19 +53,19 @@ export class ChunkedUploadService {
   ) {}
 
   async acceptChunk(input: AcceptChunkInput): Promise<AcceptChunkResult> {
-    if (input.fileSizeBytes > this.options.maxFileSizeBytes) {
-      throw new FileTooLargeError(input.fileSizeBytes, this.options.maxFileSizeBytes);
-    }
-    validateChunk({
-      fileSizeBytes: input.fileSizeBytes,
-      totalChunks: input.totalChunks,
-      chunkIndex: input.chunkIndex,
-      byteLength: input.chunk.byteLength,
-    });
-
+    // Resolve the session first, then validate the chunk against the size and
+    // chunk count the session was opened with — never the per-request fields,
+    // which a resumed upload could send inconsistently and corrupt the file.
     const session = input.transferId
       ? await this.resumeSession(input.transferId, input.roomId)
       : await this.openSession(input);
+
+    validateChunk({
+      fileSizeBytes: session.fileSizeBytes,
+      totalChunks: session.totalChunks,
+      chunkIndex: input.chunkIndex,
+      byteLength: input.chunk.byteLength,
+    });
 
     await this.storage.putObject(
       chunkObjectKey(session.roomId, session.transferId, input.chunkIndex),
@@ -96,31 +97,48 @@ export class ChunkedUploadService {
   }
 
   private async openSession(input: AcceptChunkInput): Promise<UploadSession> {
-    const active = await this.sessions.countByRoom(input.roomId);
-    if (active >= MAX_CONCURRENT_TRANSFERS_PER_ROOM) {
+    if (input.fileSizeBytes > this.options.maxFileSizeBytes) {
+      throw new FileTooLargeError(input.fileSizeBytes, this.options.maxFileSizeBytes);
+    }
+
+    // Pin the id up front so the room slot is claimed before any DB write; the
+    // reserve is atomic, so concurrent opens can't overshoot the cap.
+    const transferId = randomUUID();
+    const session = await this.sessions.reserve(
+      {
+        transferId,
+        roomId: input.roomId,
+        fileName: input.fileName,
+        fileSizeBytes: input.fileSizeBytes,
+        mimeType: input.mimeType,
+        totalChunks: input.totalChunks,
+      },
+      MAX_CONCURRENT_TRANSFERS_PER_ROOM,
+    );
+    if (!session) {
       throw new ConcurrentTransferLimitError(MAX_CONCURRENT_TRANSFERS_PER_ROOM);
     }
 
-    const transfer = await this.transfers.create({
-      roomId: input.roomId,
-      payloadType: 'FILE',
-      contentLength: BigInt(input.fileSizeBytes),
-    });
-    await this.transfers.createFilePayload({
-      transferId: transfer.id,
-      fileName: input.fileName,
-      fileSizeBytes: BigInt(input.fileSizeBytes),
-      mimeType: input.mimeType,
-      storageKey: fileObjectKey(input.roomId, transfer.id),
-    });
+    try {
+      await this.transfers.create({
+        id: transferId,
+        roomId: input.roomId,
+        payloadType: 'FILE',
+        contentLength: BigInt(input.fileSizeBytes),
+      });
+      await this.transfers.createFilePayload({
+        transferId,
+        fileName: input.fileName,
+        fileSizeBytes: BigInt(input.fileSizeBytes),
+        mimeType: input.mimeType,
+        storageKey: fileObjectKey(input.roomId, transferId),
+      });
+    } catch (err) {
+      // Release the reserved slot so a failed DB write doesn't strand it.
+      await this.sessions.delete(transferId);
+      throw err;
+    }
 
-    return this.sessions.create({
-      transferId: transfer.id,
-      roomId: input.roomId,
-      fileName: input.fileName,
-      fileSizeBytes: input.fileSizeBytes,
-      mimeType: input.mimeType,
-      totalChunks: input.totalChunks,
-    });
+    return session;
   }
 }

@@ -129,6 +129,35 @@ describe("uploadFileInChunks", () => {
     expect(body.get("mimeType")).toBe("application/octet-stream");
   });
 
+  it("wraps a network failure as UploadError so the row shows a clean message", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("Failed to fetch"));
+    const attempt = uploadFileInChunks({
+      file: fileOfSize(10),
+      token: "tok",
+      apiOrigin: "http://a",
+      fetchFn,
+    });
+    await expect(attempt).rejects.toThrow(UploadError);
+    await expect(attempt).rejects.toThrow(/Check your connection/);
+  });
+
+  it("wraps a malformed success body as UploadError", async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("not json", { status: 201 }));
+    await expect(
+      uploadFileInChunks({ file: fileOfSize(10), token: "tok", apiOrigin: "http://a", fetchFn }),
+    ).rejects.toThrow(UploadError);
+  });
+
+  it("lets an AbortError surface so the caller can tell cancel from failure", async () => {
+    const abort = new DOMException("aborted", "AbortError");
+    const fetchFn = vi.fn<typeof fetch>().mockRejectedValue(abort);
+    await expect(
+      uploadFileInChunks({ file: fileOfSize(10), token: "tok", apiOrigin: "http://a", fetchFn }),
+    ).rejects.toBe(abort);
+  });
+
   it("sends the room token as a Bearer header", async () => {
     const fetchFn = vi
       .fn<typeof fetch>()

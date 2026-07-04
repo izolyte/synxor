@@ -19,7 +19,10 @@ export function IncomingTransferRow({
   transfer: TransferProgressPayload;
   downloadHref: string;
 }) {
-  const percent = Math.round((transfer.receivedChunks / transfer.totalChunks) * 100);
+  const percent =
+    transfer.totalChunks > 0
+      ? Math.round((transfer.receivedChunks / transfer.totalChunks) * 100)
+      : 0;
 
   return (
     <li className="motion-safe:animate-[message-in_var(--duration-normal)_var(--ease-out)] flex items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-3 py-2 text-sm">

@@ -1,6 +1,7 @@
 import type { Readable } from 'stream';
 import { CHUNK_SIZE_BYTES } from '../domain/transfer/chunking';
 import {
+  ChunkOutOfRangeError,
   ConcurrentTransferLimitError,
   FileTooLargeError,
   UploadRoomMismatchError,
@@ -198,6 +199,25 @@ describe('ChunkedUploadService', () => {
     await expect(service.acceptChunk(firstChunkInput())).rejects.toThrow(
       ConcurrentTransferLimitError,
     );
+  });
+
+  it('validates a resumed chunk against the session, ignoring the request fields', async () => {
+    const { transferId } = await service.acceptChunk(firstChunkInput());
+    // Session was opened with totalChunks: 2. A resumed request lying about
+    // totalChunks/fileSizeBytes must not widen the accepted chunk range.
+    await expect(
+      service.acceptChunk(
+        firstChunkInput({
+          transferId,
+          chunkIndex: 5,
+          totalChunks: 99,
+          fileSizeBytes: 99 * CHUNK_SIZE_BYTES,
+          chunk: Buffer.alloc(CHUNK_SIZE_BYTES, 9),
+        }),
+      ),
+    ).rejects.toThrow(ChunkOutOfRangeError);
+    // The bogus chunk never reached storage.
+    expect(storage.objects.has(chunkObjectKey(roomId, transferId, 5))).toBe(false);
   });
 
   it('is idempotent for a re-sent chunk', async () => {

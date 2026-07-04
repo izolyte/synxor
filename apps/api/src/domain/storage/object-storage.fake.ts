@@ -1,5 +1,5 @@
 import { Readable } from 'stream';
-import type { ObjectStorage } from './object-storage';
+import { ObjectNotFoundError, type ObjectStorage } from './object-storage';
 
 export class FakeObjectStorage implements ObjectStorage {
   readonly objects = new Map<string, Buffer>();
@@ -18,7 +18,7 @@ export class FakeObjectStorage implements ObjectStorage {
 
   getObject(key: string, offset = 0): Promise<Readable> {
     const buf = this.objects.get(key);
-    if (!buf) return Promise.reject(new Error(`No object at key ${key}`));
+    if (!buf) return Promise.reject(new ObjectNotFoundError(key));
     return Promise.resolve(Readable.from(offset > 0 ? buf.subarray(offset) : buf));
   }
 

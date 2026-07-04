@@ -1,7 +1,15 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Client } from 'minio';
 import type { Readable } from 'stream';
-import type { ObjectStorage } from '../../../domain/storage/object-storage';
+import { ObjectNotFoundError, type ObjectStorage } from '../../../domain/storage/object-storage';
+
+// S3/MinIO codes for a missing object; either can surface depending on whether
+// the caller passed a range.
+const NOT_FOUND_CODES = new Set(['NoSuchKey', 'NotFound', 'InvalidRange']);
+
+function isNotFound(err: unknown): boolean {
+  return NOT_FOUND_CODES.has((err as { code?: string })?.code ?? '');
+}
 
 function isPermanentError(err: unknown): boolean {
   const code = (err as { code?: string })?.code;
@@ -72,8 +80,13 @@ export class MinioService implements OnModuleInit, ObjectStorage {
   }
 
   async getObject(key: string, offset = 0): Promise<Readable> {
-    if (offset > 0) return this.client.getPartialObject(this.bucket, key, offset);
-    return this.client.getObject(this.bucket, key);
+    try {
+      if (offset > 0) return await this.client.getPartialObject(this.bucket, key, offset);
+      return await this.client.getObject(this.bucket, key);
+    } catch (err) {
+      if (isNotFound(err)) throw new ObjectNotFoundError(key);
+      throw err;
+    }
   }
 
   async removeObject(key: string): Promise<void> {

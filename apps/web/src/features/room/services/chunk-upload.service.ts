@@ -65,15 +65,26 @@ export async function uploadFileInChunks({
     body.set("mimeType", file.type || "application/octet-stream");
     body.set("chunk", file.slice(start, start + CHUNK_SIZE_BYTES));
 
-    const response = await fetchFn(`${apiOrigin}/transfer/chunk`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body,
-      signal,
-    });
+    let response: Response;
+    try {
+      response = await fetchFn(`${apiOrigin}/transfer/chunk`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+        signal,
+      });
+    } catch (err) {
+      // AbortError surfaces as-is so the caller can tell "cancelled" from "failed".
+      if (err instanceof DOMException && err.name === "AbortError") throw err;
+      throw new UploadError("Upload failed. Check your connection and try again.");
+    }
     if (!response.ok) throw new UploadError(messageFor(response.status), response.status);
 
-    last = (await response.json()) as ChunkUploadResponse;
+    try {
+      last = (await response.json()) as ChunkUploadResponse;
+    } catch {
+      throw new UploadError("Upload failed. The server sent an unexpected response.");
+    }
     transferId = last.transferId;
     onProgress?.(Math.round(((chunkIndex + 1) / totalChunks) * 100));
   }

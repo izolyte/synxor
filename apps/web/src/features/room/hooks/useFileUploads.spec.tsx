@@ -78,6 +78,15 @@ function Harness({
         fail-unknown
       </button>
       <button onClick={() => setFiles((current) => current.slice(1))}>remove-first</button>
+      <button
+        onClick={() =>
+          setFiles((current) =>
+            current.some((f) => f.id === "a.txt") ? current : [...current, queued("a.txt")],
+          )
+        }
+      >
+        re-add-a
+      </button>
       <button onClick={() => setToken("tok")}>grant-token</button>
     </>
   );
@@ -156,5 +165,21 @@ suite("useFileUploads", () => {
 
     await screen.find({ testId: "a.txt" }).shouldHaveText("none");
     await screen.find({ testId: "b.txt" }).shouldHaveText("uploading:0");
+  });
+
+  test("re-adding a removed file starts a fresh upload for it", async () => {
+    const uploader = new FakeUploader();
+    const screen = renderComponent(<Harness uploader={uploader} initial={[queued("a.txt")]} />);
+    await screen.find({ testId: "a.txt" }).shouldHaveText("uploading:0");
+
+    // Remove while in flight (aborts), then queue the same file again.
+    await screen.find({ role: "button", name: "remove-first" }).click();
+    await screen.find({ testId: "a.txt" }).shouldHaveText("none");
+
+    await screen.find({ role: "button", name: "re-add-a" }).click();
+    await screen.find({ testId: "a.txt" }).shouldHaveText("uploading:0");
+
+    await screen.find({ role: "button", name: "finish" }).click();
+    await screen.find({ testId: "a.txt" }).shouldHaveText("done:t2");
   });
 });

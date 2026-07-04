@@ -4,7 +4,11 @@ import {
   TRANSFER_REPOSITORY,
   type TransferRepository,
 } from '../domain/transfer/transfer.repository';
-import { OBJECT_STORAGE, type ObjectStorage } from '../domain/storage/object-storage';
+import {
+  OBJECT_STORAGE,
+  ObjectNotFoundError,
+  type ObjectStorage,
+} from '../domain/storage/object-storage';
 import { UPLOAD_SESSION_STORE, type UploadSessionStore } from '../domain/transfer/upload-session';
 import { CHUNK_SIZE_BYTES } from '../domain/transfer/chunking';
 import { chunkObjectKey } from '../domain/transfer/storage-key';
@@ -70,10 +74,13 @@ export class TransferDownloadService {
       let chunk: AsyncIterable<Buffer>;
       try {
         chunk = await this.storage.getObject(chunkObjectKey(roomId, transferId, chunkIndex));
-      } catch {
-        // Assembly can delete this chunk object between the session check and
-        // the read; back off (a bare continue would busy-spin on microtasks and
-        // starve the timers) and loop so the session-gone branch takes over.
+      } catch (err) {
+        // Only a missing object is expected here: assembly can delete this chunk
+        // between the session check and the read. Back off (a bare continue would
+        // busy-spin on microtasks and starve the timers) and loop so the
+        // session-gone branch takes over. A real storage failure must surface, not
+        // spin forever.
+        if (!(err instanceof ObjectNotFoundError)) throw err;
         await sleep(this.options.pollIntervalMs);
         continue;
       }

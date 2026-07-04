@@ -61,14 +61,17 @@ describe('TransferDownloadService', () => {
   it('streams chunks that arrive while the download is open', async () => {
     const fileSizeBytes = CHUNK_SIZE_BYTES + 100;
     const transferId = await seedTransfer(fileSizeBytes);
-    await sessions.create({
-      transferId,
-      roomId,
-      fileName: 'video.mp4',
-      fileSizeBytes,
-      mimeType: 'video/mp4',
-      totalChunks: 2,
-    });
+    await sessions.reserve(
+      {
+        transferId,
+        roomId,
+        fileName: 'video.mp4',
+        fileSizeBytes,
+        mimeType: 'video/mp4',
+        totalChunks: 2,
+      },
+      100,
+    );
 
     const first = Buffer.alloc(CHUNK_SIZE_BYTES, 1);
     storage.objects.set(chunkObjectKey(roomId, transferId, 0), first);
@@ -90,14 +93,17 @@ describe('TransferDownloadService', () => {
   it('switches to the assembled object when the session closes mid-download', async () => {
     const fileSizeBytes = CHUNK_SIZE_BYTES + 100;
     const transferId = await seedTransfer(fileSizeBytes);
-    await sessions.create({
-      transferId,
-      roomId,
-      fileName: 'video.mp4',
-      fileSizeBytes,
-      mimeType: 'video/mp4',
-      totalChunks: 2,
-    });
+    await sessions.reserve(
+      {
+        transferId,
+        roomId,
+        fileName: 'video.mp4',
+        fileSizeBytes,
+        mimeType: 'video/mp4',
+        totalChunks: 2,
+      },
+      100,
+    );
     const first = Buffer.alloc(CHUNK_SIZE_BYTES, 1);
     const tail = Buffer.alloc(100, 2);
     storage.objects.set(chunkObjectKey(roomId, transferId, 0), first);
@@ -119,14 +125,17 @@ describe('TransferDownloadService', () => {
   it('recovers when assembly deletes a chunk object between the session check and the read', async () => {
     const fileSizeBytes = CHUNK_SIZE_BYTES + 100;
     const transferId = await seedTransfer(fileSizeBytes);
-    await sessions.create({
-      transferId,
-      roomId,
-      fileName: 'video.mp4',
-      fileSizeBytes,
-      mimeType: 'video/mp4',
-      totalChunks: 2,
-    });
+    await sessions.reserve(
+      {
+        transferId,
+        roomId,
+        fileName: 'video.mp4',
+        fileSizeBytes,
+        mimeType: 'video/mp4',
+        totalChunks: 2,
+      },
+      100,
+    );
     // Chunk 0 is marked received but its object is already gone — the reader
     // must spin on the race branch until the session closes, then take the
     // assembled object from byte 0.
@@ -142,6 +151,31 @@ describe('TransferDownloadService', () => {
     }, 20);
 
     await expect(drained).resolves.toEqual(content);
+  });
+
+  it('surfaces a real storage error instead of polling forever', async () => {
+    const fileSizeBytes = CHUNK_SIZE_BYTES + 100;
+    const transferId = await seedTransfer(fileSizeBytes);
+    await sessions.reserve(
+      {
+        transferId,
+        roomId,
+        fileName: 'video.mp4',
+        fileSizeBytes,
+        mimeType: 'video/mp4',
+        totalChunks: 2,
+      },
+      100,
+    );
+    await sessions.markReceived(transferId, 0);
+
+    // Chunk 0 is marked received, but reading it fails with a non-not-found
+    // error (auth/network). The reader must reject, not spin.
+    const boom = new Error('minio unreachable');
+    storage.getObject = () => Promise.reject(boom);
+
+    const download = await service.open(transferId, roomId);
+    await expect(drain(download.stream)).rejects.toThrow('minio unreachable');
   });
 
   it('rejects an unknown transfer', async () => {

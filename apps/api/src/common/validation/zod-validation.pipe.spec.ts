@@ -15,9 +15,10 @@ describe('ZodValidationPipe', () => {
   });
 
   it('throws a 400 carrying the zod issues', () => {
+    expect.hasAssertions();
     try {
       pipe.transform({ name: '', count: 'x' });
-      fail('expected BadRequestException');
+      throw new Error('expected BadRequestException');
     } catch (err) {
       expect(err).toBeInstanceOf(BadRequestException);
       const body = (err as BadRequestException).getResponse() as { message: unknown[] };
