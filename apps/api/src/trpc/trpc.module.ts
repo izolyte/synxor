@@ -1,5 +1,6 @@
 import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
+import type { Express } from 'express';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { RoomModule } from '../room/room.module';
 import { TrpcService } from './trpc.service';
@@ -20,7 +21,7 @@ export class TrpcModule implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    const app = this.httpAdapterHost.httpAdapter.getInstance();
+    const app = this.httpAdapterHost.httpAdapter.getInstance<Express>();
     app.use(
       TRPC_PATH,
       createExpressMiddleware({
