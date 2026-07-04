@@ -12,6 +12,9 @@ const hostname = process.env.HOST || "0.0.0.0";
 
 const app = new Hono();
 
+// Cheap liveness probe for the container healthcheck — no SSR render.
+app.get("/healthz", (c) => c.text("ok"));
+
 // Content-hashed Vite assets. A miss calls next(), so real routes fall through.
 app.use("/*", serveStatic({ root: "./dist/client" }));
 
@@ -19,6 +22,11 @@ app.use("/*", serveStatic({ root: "./dist/client" }));
 // handler wants; it returns a Web Response Hono forwards as-is.
 app.all("/*", (c) => handler.fetch(c.req.raw));
 
-serve({ fetch: app.fetch, port, hostname }, (info) => {
+const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(`web listening on http://${hostname}:${info.port}`);
 });
+
+// Stop accepting connections and let in-flight requests drain on container stop.
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, () => server.close(() => process.exit(0)));
+}
