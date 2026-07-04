@@ -8,9 +8,9 @@ export class InMemoryRoomRepository implements RoomRepository {
   readonly stored = new Map<string, Room>();
   private nextId = 1;
 
-  async create(input: CreateRoomInput): Promise<Room> {
+  create(input: CreateRoomInput): Promise<Room> {
     if (this.stored.has(input.code)) {
-      throw new RoomCodeCollisionError(input.code);
+      return Promise.reject(new RoomCodeCollisionError(input.code));
     }
     const room: Room = {
       id: `room-${this.nextId++}`,
@@ -20,31 +20,34 @@ export class InMemoryRoomRepository implements RoomRepository {
       createdAt: new Date(),
     };
     this.stored.set(room.code, room);
-    return room;
+    return Promise.resolve(room);
   }
 
-  async findById(id: string): Promise<Room | null> {
-    return [...this.stored.values()].find((r) => r.id === id) ?? null;
+  findById(id: string): Promise<Room | null> {
+    return Promise.resolve([...this.stored.values()].find((r) => r.id === id) ?? null);
   }
 
-  async findByCode(code: string): Promise<Room | null> {
-    return this.stored.get(code) ?? null;
+  findByCode(code: string): Promise<Room | null> {
+    return Promise.resolve(this.stored.get(code) ?? null);
   }
 
-  async updateStatus(id: string, status: RoomStatus): Promise<Room> {
+  updateStatus(id: string, status: RoomStatus): Promise<Room> {
     const room = [...this.stored.values()].find((r) => r.id === id)!;
     const updated: Room = { ...room, status };
     this.stored.set(room.code, updated);
-    return updated;
+    return Promise.resolve(updated);
   }
 
-  async findExpiredActive(): Promise<Room[]> {
+  findExpiredActive(): Promise<Room[]> {
     const now = new Date();
-    return [...this.stored.values()].filter((r) => r.status === 'ACTIVE' && r.expiresAt <= now);
+    return Promise.resolve(
+      [...this.stored.values()].filter((r) => r.status === 'ACTIVE' && r.expiresAt <= now),
+    );
   }
 
-  async delete(id: string): Promise<void> {
+  delete(id: string): Promise<void> {
     const room = [...this.stored.values()].find((r) => r.id === id);
     if (room) this.stored.delete(room.code);
+    return Promise.resolve();
   }
 }

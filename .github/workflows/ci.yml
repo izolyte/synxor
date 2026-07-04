@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch cancels the in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: api — lint · typecheck · build · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # No job pushes, so don't leave the token in .git/config where a
+          # dependency lifecycle script during install could read it.
+          persist-credentials: false
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Prisma Client is generated, not committed — every job that compiles the
+      # api needs it first.
+      - run: pnpm --filter api exec prisma generate
+      - run: pnpm --filter api lint
+      - run: pnpm --filter api exec tsc --noEmit
+      - run: pnpm --filter api build
+      - run: pnpm --filter api test
+
+  web:
+    name: web — build · lint · typecheck · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # No job pushes, so don't leave the token in .git/config where a
+          # dependency lifecycle script during install could read it.
+          persist-credentials: false
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # web typechecks against the api's shared contract, which pulls in Prisma types.
+      - run: pnpm --filter api exec prisma generate
+      # `vite build` also writes routeTree.gen.ts, which typecheck and tests import,
+      # so it has to run before them. VITE_API_URL is inlined at build time; the
+      # value is irrelevant here since CI never serves the bundle.
+      - run: pnpm --filter web build
+        env:
+          VITE_API_URL: http://localhost:3000
+      - run: pnpm --filter web lint
+      - run: pnpm --filter web exec tsc --noEmit
+      - run: pnpm --filter web test
+
+  commitlint:
+    name: commitlint — Conventional Commits
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+
+# Note: the e2e job (Playwright against the full Docker Compose stack) lands with
+# #23, once the web Dockerfile + Compose service (#47) exist to build the stack.
