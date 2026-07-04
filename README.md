@@ -50,6 +50,9 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 | Variable | Default | Description |
 |---|---|---|
 | `API_PORT` | `3000` | Port the NestJS API listens on |
+| `WEB_PORT` | `3001` | Host port for the SSR web container |
+| `VITE_API_URL` | `http://localhost:3000` | Public API origin baked into the web client bundle at build time (browser-reachable) |
+| `ALLOWED_ORIGINS` | `http://localhost:3001` | HTTP CORS allowlist; must include the web origin |
 | `POSTGRES_PASSWORD` | — | **Required.** PostgreSQL password |
 | `POSTGRES_USER` | `synxor` | PostgreSQL user |
 | `POSTGRES_DB` | `synxor` | PostgreSQL database name |

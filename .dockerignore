@@ -4,3 +4,6 @@
 **/.scratch
 **/*.log
 **/*.tsbuildinfo
+# Never bake secrets into the image; the example template isn't needed either.
+**/.env
+**/.env.*
