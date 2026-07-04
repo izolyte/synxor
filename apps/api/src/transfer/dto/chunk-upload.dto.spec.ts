@@ -32,4 +32,19 @@ describe('chunkUploadSchema', () => {
   ])('rejects the malformed MIME type %j', (mimeType) => {
     expect(() => chunkUploadSchema.parse(base({ mimeType }))).toThrow();
   });
+
+  it.each([
+    { chunkIndex: '-1' }, // chunks are zero-indexed
+    { totalChunks: '0' }, // a payload has at least one chunk
+    { fileSizeBytes: '0' }, // schema floor is 1 byte
+    { fileName: '' },
+    { fileName: 'x'.repeat(1025) }, // over the 1024 cap
+  ])('rejects out-of-bounds field %j', (overrides) => {
+    expect(() => chunkUploadSchema.parse(base(overrides))).toThrow();
+  });
+
+  it('treats transferId as optional (absent on the first chunk)', () => {
+    expect(chunkUploadSchema.parse(base()).transferId).toBeUndefined();
+    expect(chunkUploadSchema.parse(base({ transferId: 't1' })).transferId).toBe('t1');
+  });
 });

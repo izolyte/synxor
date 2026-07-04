@@ -3,9 +3,10 @@ import { Client } from 'minio';
 import type { Readable } from 'stream';
 import { ObjectNotFoundError, type ObjectStorage } from '../../../domain/storage/object-storage';
 
-// S3/MinIO codes for a missing object; either can surface depending on whether
-// the caller passed a range.
-const NOT_FOUND_CODES = new Set(['NoSuchKey', 'NotFound', 'InvalidRange']);
+// S3/MinIO codes for a missing object. `InvalidRange` is deliberately excluded:
+// a bad byte range is a caller bug, not a missing object, and must not be
+// swallowed as "not there yet".
+const NOT_FOUND_CODES = new Set(['NoSuchKey', 'NotFound']);
 
 function isNotFound(err: unknown): boolean {
   return NOT_FOUND_CODES.has((err as { code?: string })?.code ?? '');
