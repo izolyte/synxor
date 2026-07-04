@@ -19,6 +19,13 @@ export default tseslint.config(
     },
   },
   {
+    // The production SSR entry runs on Node, not in the browser.
+    files: ["server.js"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
     ignores: [
       "node_modules/",
       ".output/",

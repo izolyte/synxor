@@ -24,6 +24,27 @@ services:
     networks:
       - synxor
 
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the client bundle at build time — must be the origin the
+        # user's browser reaches the api on (host-mapped port), not the internal
+        # docker hostname.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    ports:
+      - "${WEB_PORT:-3001}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - synxor
+
   postgres:
     image: postgres:17-alpine
     environment:
