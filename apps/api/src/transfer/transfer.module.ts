@@ -11,6 +11,7 @@ import { ChunkedUploadService } from './chunked-upload.service';
 import { ChunkAssembler } from './chunk-assembler';
 import { TransferProgressNotifier } from './transfer-progress.notifier';
 import { TransferDownloadService } from './transfer-download.service';
+import { TransferDeliveryService } from './transfer-delivery.service';
 import { TransferController } from './transfer.controller';
 import { transferOptionsProviders } from './transfer.options';
 
@@ -22,6 +23,7 @@ import { transferOptionsProviders } from './transfer.options';
     ChunkAssembler,
     TransferProgressNotifier,
     TransferDownloadService,
+    TransferDeliveryService,
     RoomTokenGuard,
     RoomRoleGuard,
     ...transferOptionsProviders,

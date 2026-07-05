@@ -16,6 +16,7 @@ import {
   type AcceptChunkResult,
 } from './chunked-upload.service';
 import { TransferDownloadService, type TransferDownload } from './transfer-download.service';
+import { TransferDeliveryService } from './transfer-delivery.service';
 
 // Controls what claims are returned per token string — no real JWT needed.
 class FakeTokenVerifier {
@@ -64,10 +65,30 @@ class FakeTransferDownloadService {
   }
 }
 
+// Confirmation runs off the response 'finish' event, after supertest has already
+// resolved — nextCall() lets a test await that fire instead of racing it.
+class FakeTransferDeliveryService {
+  readonly calls: Array<{ transferId: string; roomId: string }> = [];
+  private resolvers: Array<() => void> = [];
+
+  confirmDelivered(transferId: string, roomId: string): Promise<void> {
+    this.calls.push({ transferId, roomId });
+    this.resolvers.forEach((resolve) => resolve());
+    this.resolvers = [];
+    return Promise.resolve();
+  }
+
+  nextCall(): Promise<void> {
+    if (this.calls.length > 0) return Promise.resolve();
+    return new Promise((resolve) => this.resolvers.push(resolve));
+  }
+}
+
 describe('TransferController', () => {
   let app: INestApplication;
   let uploads: FakeChunkedUploadService;
   let downloads: FakeTransferDownloadService;
+  let delivery: FakeTransferDeliveryService;
 
   const senderToken = 'sender-tok';
   const receiverToken = 'receiver-tok';
@@ -75,6 +96,7 @@ describe('TransferController', () => {
   beforeEach(async () => {
     uploads = new FakeChunkedUploadService();
     downloads = new FakeTransferDownloadService();
+    delivery = new FakeTransferDeliveryService();
     const verifier = new FakeTokenVerifier();
     verifier.register(senderToken, { roomId: 'room-1', role: TokenRole.Sender });
     verifier.register(receiverToken, { roomId: 'room-1', role: TokenRole.Receiver });
@@ -87,6 +109,7 @@ describe('TransferController', () => {
         { provide: TOKEN_VERIFIER, useValue: verifier },
         { provide: ChunkedUploadService, useValue: uploads },
         { provide: TransferDownloadService, useValue: downloads },
+        { provide: TransferDeliveryService, useValue: delivery },
       ],
     }).compile();
 
@@ -194,6 +217,16 @@ describe('TransferController', () => {
       expect(res.body).toEqual(Buffer.from('hello'));
     });
 
+    it('confirms delivery once the download response finishes', async () => {
+      await request(http())
+        .get('/transfer/transfer-1/download')
+        .auth(receiverToken, { type: 'bearer' })
+        .expect(200);
+
+      await delivery.nextCall();
+      expect(delivery.calls).toEqual([{ transferId: 'transfer-1', roomId: 'room-1' }]);
+    });
+
     it('RFC 5987-encodes filenames that cannot travel raw in a header', async () => {
       downloads.download.fileName = 'héllo file.mp4';
       const res = await request(http())
@@ -217,6 +250,7 @@ describe('TransferController', () => {
         .auth(receiverToken, { type: 'bearer' })
         .expect(404);
       expect(res.body).toEqual({ statusCode: 404, message: downloads.error.message });
+      expect(delivery.calls).toHaveLength(0);
     });
   });
 });
