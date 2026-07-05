@@ -301,4 +301,94 @@ describe('RoomGateway', () => {
       errorSpy.mockRestore();
     }
   });
+
+  // ── Text Snippet / Link transfer ─────────────────────────────────────────────
+
+  function sendText(socket: Socket, text: string): Promise<unknown> {
+    return new Promise((resolve) => socket.emit('transfer:text:send', { text }, resolve));
+  }
+
+  it('classifies a URL as a Link and broadcasts it to the Receiver', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    const received = waitFor(receiver, 'transfer:text');
+    const ack = (await sendText(sender, '  https://example.com/x  ')) as { transferId: string };
+
+    const payload = (await received) as {
+      transferId: string;
+      payloadType: string;
+      content: string;
+    };
+    expect(payload).toEqual({
+      transferId: ack.transferId,
+      payloadType: 'LINK',
+      content: 'https://example.com/x',
+    });
+  });
+
+  it('classifies plain text as a Text Snippet', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    const received = waitFor(receiver, 'transfer:text');
+    await sendText(sender, 'just some notes');
+
+    expect((await received) as { payloadType: string }).toMatchObject({
+      payloadType: 'TEXT_SNIPPET',
+      content: 'just some notes',
+    });
+  });
+
+  it('does not echo the Text back to the Sender who sent it', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    const echoed = waitFor(sender, 'transfer:text');
+    await sendText(sender, 'https://example.com');
+    await new Promise((r) => setTimeout(r, 50));
+
+    await expect(Promise.race([echoed, Promise.resolve('none')])).resolves.toBe('none');
+  });
+
+  it('rejects a Receiver trying to send text and broadcasts nothing', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    const senderGot = waitFor(sender, 'transfer:text');
+    const ack = (await sendText(receiver, 'https://example.com')) as { error: string };
+
+    expect(ack.error).toBe('Only the Sender may send text');
+    await new Promise((r) => setTimeout(r, 50));
+    await expect(Promise.race([senderGot, Promise.resolve('none')])).resolves.toBe('none');
+  });
+
+  it('rejects text over the character limit', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+
+    const ack = (await sendText(sender, 'a'.repeat(100_001))) as { error: string };
+    expect(ack.error).toMatch(/character limit/);
+  });
 });
