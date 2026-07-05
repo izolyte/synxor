@@ -31,9 +31,37 @@ globalThis.ResizeObserver ??= class {
 // has no layout, so it's absent and the timer throws after the test ends. Stub it.
 document.elementFromPoint ??= (() => null) as typeof document.elementFromPoint;
 
+// input-otp schedules focus-sync setTimeouts (0/10/50ms) that it doesn't clear on
+// unmount. If one fires after Vitest tears down the jsdom environment, React reads
+// a gone `window` and throws an uncaught "window is not defined" — flaking the
+// suite (~1/3 of runs on slower CI). #63 disabled input-otp's password-manager
+// timers; these focus-sync ones aren't gated by that, so track every timeout and
+// clear whatever a test leaves pending in afterEach. Nothing legitimately needs a
+// timer to survive the test that scheduled it.
+const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+const nativeSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = function trackedSetTimeout(
+  handler: TimerHandler,
+  timeout?: number,
+  ...args: unknown[]
+): ReturnType<typeof setTimeout> {
+  const id = nativeSetTimeout(
+    (...cbArgs: unknown[]) => {
+      pendingTimeouts.delete(id);
+      if (typeof handler === "function") (handler as (...a: unknown[]) => void)(...cbArgs);
+    },
+    timeout,
+    ...args,
+  );
+  pendingTimeouts.add(id);
+  return id;
+} as unknown as typeof setTimeout;
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   cleanup();
+  for (const id of pendingTimeouts) clearTimeout(id);
+  pendingTimeouts.clear();
   server.resetHandlers();
   localStorage.clear();
   sessionStorage.clear();
