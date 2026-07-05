@@ -16,6 +16,11 @@ function InputOTP({
     <OTPInput
       ref={ref}
       data-slot="input-otp"
+      // The Room Code isn't a credential, so there's no password-manager badge to
+      // dodge. Disabling the strategy also drops input-otp's window-reading
+      // setInterval/setTimeout, which otherwise fire after jsdom teardown and
+      // flake the web test suite ("window is not defined"). Overridable by callers.
+      pushPasswordManagerStrategy="none"
       containerClassName={cn(
         "flex items-center gap-2 has-[:disabled]:opacity-50",
         containerClassName,
