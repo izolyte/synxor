@@ -78,6 +78,8 @@ suite("TransferRow", () => {
     expect(link).toHaveAttribute("href", "https://example.com");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noreferrer");
+    // No sizeBytes → the size column is omitted entirely (files-only).
+    expect(rtlScreen.queryByText(/^\d+(\.\d+)?\s(B|KB|MB|GB|TB)$/)).not.toBeInTheDocument();
   });
 
   test("copies a snippet's value through the copy action", async () => {
