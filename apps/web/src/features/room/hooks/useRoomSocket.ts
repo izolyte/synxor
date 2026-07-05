@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { createRoomSocket } from "~/features/room/services/room-socket.service";
 import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import { RoomEvent, type RoomPresencePayload } from "~/features/room/constants/room-events";
-import { TransferEvent, type TransferProgressPayload } from "~/features/room/constants/transfer";
+import {
+  TransferEvent,
+  type TransferProgressPayload,
+  type TransferTextPayload,
+} from "~/features/room/constants/transfer";
 
 export type RoomSocketStatus = "idle" | "connecting" | "connected" | "disconnected";
 
@@ -12,7 +16,21 @@ export interface RoomSocketState {
   receiverCount: number;
   /** Live Transfers in this Room, ordered by first progress event. */
   transfers: TransferProgressPayload[];
+  /** Text Snippets / Links received over the socket, in arrival order. */
+  texts: TransferTextPayload[];
 }
+
+export interface RoomSocket extends RoomSocketState {
+  /** Sends a Text Snippet / Link to the Room; a no-op until the socket is live. */
+  sendText: (text: string) => void;
+}
+
+const initialState: RoomSocketState = {
+  status: "idle",
+  receiverCount: 0,
+  transfers: [],
+  texts: [],
+};
 
 // Default factory: the real socket. Tests pass a fake to drive events without a
 // server, keeping the hook decoupled from socket.io-client.
@@ -22,29 +40,27 @@ const defaultFactory: SocketFactory = (token) =>
   createRoomSocket(resolveApiOrigin(import.meta.env), token);
 
 /**
- * Subscribes the Sender to live Receiver presence for the current Room. Connects
- * with the Room Token, then tracks the receiver count from room:joined / room:left.
- * No token (session not resolved, or SSR) means no socket — returns an idle state
- * with count 0, so callers can render the same "waiting" markup on both passes.
+ * Subscribes to live Room activity — Receiver presence, file progress, and
+ * incoming Text/Link payloads — and exposes sendText for the Sender to push one.
+ * No token (session not resolved, or SSR) means no socket: returns an idle state
+ * so callers can render the same "waiting" markup on both passes.
  */
 export function useRoomSocket(
   token: string | undefined,
   factory: SocketFactory = defaultFactory,
-): RoomSocketState {
-  const [state, setState] = useState<RoomSocketState>({
-    status: "idle",
-    receiverCount: 0,
-    transfers: [],
-  });
+): RoomSocket {
+  const [state, setState] = useState<RoomSocketState>(initialState);
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     if (!token) {
-      setState({ status: "idle", receiverCount: 0, transfers: [] });
+      setState(initialState);
       return;
     }
 
-    setState({ status: "connecting", receiverCount: 0, transfers: [] });
+    setState({ ...initialState, status: "connecting" });
     const socket = factory(token);
+    socketRef.current = socket;
 
     // Trust nothing off the wire: a malformed or missing count (protocol drift, a
     // bad server build) coerces to 0 rather than rendering "NaN Receivers".
@@ -68,6 +84,17 @@ export function useRoomSocket(
       });
     };
 
+    // Append each Text/Link once. A resend from the server carries a new
+    // transferId; a duplicate id (retransmit) is ignored.
+    const onText = (payload: TransferTextPayload) => {
+      if (typeof payload?.transferId !== "string") return;
+      setState((prev) =>
+        prev.texts.some((t) => t.transferId === payload.transferId)
+          ? prev
+          : { ...prev, texts: [...prev.texts, payload] },
+      );
+    };
+
     const onDown = () => setState((prev) => ({ ...prev, status: "disconnected" }));
 
     socket.on("connect", () => setState((prev) => ({ ...prev, status: "connected" })));
@@ -79,12 +106,18 @@ export function useRoomSocket(
     socket.on(RoomEvent.Joined, onCount);
     socket.on(RoomEvent.Left, onCount);
     socket.on(TransferEvent.Progress, onProgress);
+    socket.on(TransferEvent.Text, onText);
 
     return () => {
       socket.off();
       socket.disconnect();
+      socketRef.current = null;
     };
   }, [token, factory]);
 
-  return state;
+  const sendText = useCallback((text: string) => {
+    socketRef.current?.emit(TransferEvent.SendText, { text });
+  }, []);
+
+  return { ...state, sendText };
 }

@@ -1,9 +1,24 @@
 import { Inject, Logger } from '@nestjs/common';
-import { WebSocketGateway, WebSocketServer, OnGatewayConnection } from '@nestjs/websockets';
+import { randomUUID } from 'node:crypto';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+} from '@nestjs/websockets';
 import { Server, type Namespace, Socket } from 'socket.io';
 import { TOKEN_VERIFIER, type TokenVerifier } from '../domain/security/token-verifier';
 import { TokenRole, type TokenClaims } from '../domain/security/token-issuer';
 import type { ParticipantRole } from '../domain/participant/participant.entity';
+import { classifyTextPayload } from '../domain/transfer/text-payload';
+import { sendTextSchema } from '../transfer/dto/text-payload.dto';
+import {
+  TransferEvent,
+  type TransferTextPayload,
+  type TransferTextAck,
+} from '../transfer/transfer-events';
 import { hashRoomToken } from '../infrastructure/security/token-hash';
 import { RoomPresenceService } from './room-presence.service';
 import { RoomEvent } from './room-events';
@@ -31,6 +46,26 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
 
   emitToRoom(roomId: string, event: string, payload: unknown): void {
     this.server.to(roomId).emit(event, payload);
+  }
+
+  // The Sender submits a Text Snippet / Link; the server classifies it and
+  // broadcasts to the rest of the Room. Nothing is stored — this is socket-only.
+  // The ack returns the new transferId (or a reason) to the emitting client.
+  @SubscribeMessage(TransferEvent.SendText)
+  handleSendText(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown): TransferTextAck {
+    const info = this.connected.get(socket.id);
+    if (!info || info.role !== 'SENDER') {
+      return { error: 'Only the Sender may send text' };
+    }
+    const parsed = sendTextSchema.safeParse(body);
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid text payload' };
+    }
+    const { payloadType, content } = classifyTextPayload(parsed.data.text);
+    const payload: TransferTextPayload = { transferId: randomUUID(), payloadType, content };
+    // `socket.to` excludes the Sender — they already have it and get the ack.
+    socket.to(info.roomId).emit(TransferEvent.Text, payload);
+    return { transferId: payload.transferId };
   }
 
   async handleConnection(socket: Socket): Promise<void> {

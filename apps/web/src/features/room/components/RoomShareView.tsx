@@ -5,6 +5,7 @@ import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { DropZone } from "~/features/room/components/DropZone";
+import { TextPasteField } from "~/features/room/components/TextPasteField";
 import { IncomingTransfers } from "~/features/room/components/IncomingTransfers";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket } from "~/features/room/hooks/useRoomSocket";
@@ -33,7 +34,7 @@ export function RoomShareView({
 }) {
   const countdown = useCountdown(expiresAt);
   const livePresenceToken = countdown?.phase === "expired" ? undefined : token;
-  const { status, receiverCount, transfers } = useRoomSocket(livePresenceToken);
+  const { status, receiverCount, transfers, texts, sendText } = useRoomSocket(livePresenceToken);
   // Same origin the socket rides; only resolved with a live token (client-only).
   const apiOrigin = livePresenceToken ? resolveApiOrigin(import.meta.env) : undefined;
 
@@ -81,9 +82,17 @@ export function RoomShareView({
       </div>
 
       {role === "sender" ? (
-        <DropZone token={livePresenceToken} apiOrigin={apiOrigin} />
+        <div className="flex flex-col gap-3">
+          <DropZone token={livePresenceToken} apiOrigin={apiOrigin} />
+          <TextPasteField onSend={sendText} />
+        </div>
       ) : (
-        <IncomingTransfers transfers={transfers} token={livePresenceToken} apiOrigin={apiOrigin} />
+        <IncomingTransfers
+          transfers={transfers}
+          texts={texts}
+          token={livePresenceToken}
+          apiOrigin={apiOrigin}
+        />
       )}
     </>
   );

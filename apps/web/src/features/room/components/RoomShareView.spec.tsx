@@ -42,7 +42,7 @@ suite("RoomShareView", () => {
     );
 
     await screen
-      .find({ text: "Files the Sender shares will appear here, ready to download." })
+      .find({ text: "Files, text, and links the Sender shares will appear here." })
       .shouldBeVisible();
     await screen.find({ testId: "drop-zone" }).shouldNotExist();
   });
