@@ -2,6 +2,7 @@
 // room-events.ts: FE and BE both import these names, nobody hard-codes a literal.
 export const TransferEvent = {
   Progress: 'transfer:progress',
+  Delivered: 'transfer:delivered',
 } as const;
 export type TransferEvent = (typeof TransferEvent)[keyof typeof TransferEvent];
 
@@ -12,4 +13,8 @@ export interface TransferProgressPayload {
   receivedChunks: number;
   totalChunks: number;
   complete: boolean;
+}
+
+export interface TransferDeliveredPayload {
+  transferId: string;
 }

@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Logger,
   Param,
   Post,
   Res,
@@ -22,6 +23,7 @@ import { CHUNK_SIZE_BYTES } from '../domain/transfer/chunking';
 import { chunkUploadSchema, type ChunkUploadRequest } from './dto/chunk-upload.dto';
 import { ChunkedUploadService, type AcceptChunkResult } from './chunked-upload.service';
 import { TransferDownloadService } from './transfer-download.service';
+import { TransferDeliveryService } from './transfer-delivery.service';
 import { TransferErrorFilter } from './transfer-error.filter';
 
 // The only slice of Multer's file object this controller reads.
@@ -33,9 +35,12 @@ interface UploadedChunk {
 @UseGuards(RoomTokenGuard, RoomRoleGuard)
 @UseFilters(TransferErrorFilter)
 export class TransferController {
+  private readonly logger = new Logger(TransferController.name);
+
   constructor(
     private readonly uploads: ChunkedUploadService,
     private readonly downloads: TransferDownloadService,
+    private readonly delivery: TransferDeliveryService,
   ) {}
 
   @Post('chunk')
@@ -69,6 +74,16 @@ export class TransferController {
       'Content-Length': String(download.fileSizeBytes),
       // RFC 5987 encoding so arbitrary user filenames survive the header
       'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(download.fileName)}`,
+    });
+    // 'finish' fires only once the full body has been flushed to the Receiver —
+    // a client abort emits 'close' instead, so this records genuine deliveries.
+    res.on('finish', () => {
+      void this.delivery.confirmDelivered(transferId, claims.roomId).catch((err: unknown) => {
+        this.logger.error(
+          `Failed to record delivery for transfer ${transferId}`,
+          err instanceof Error ? err.stack : String(err),
+        );
+      });
     });
     return new StreamableFile(download.stream);
   }
