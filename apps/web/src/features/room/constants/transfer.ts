@@ -10,6 +10,10 @@ export const TransferEvent = {
   SendText: "transfer:text:send",
   // Server → Room: the classified payload for the other participants.
   Text: "transfer:text",
+  // Server → Room: a Receiver finished downloading a Transfer. Fires at most once
+  // per transfer. Mirrors the API's TransferEvent.Delivered (apps/api's
+  // transfer-events.ts) — no shared package, so keep the two in sync by hand.
+  Delivered: "transfer:delivered",
 } as const;
 
 export interface TransferProgressPayload {
@@ -19,6 +23,10 @@ export interface TransferProgressPayload {
   receivedChunks: number;
   totalChunks: number;
   complete: boolean;
+}
+
+export interface TransferDeliveredPayload {
+  transferId: string;
 }
 
 export type TextPayloadType = "TEXT_SNIPPET" | "LINK";

@@ -464,6 +464,16 @@
   }
 }
 
+/* Delivery flash entrance — the payoff moment (docs/design/07-motion.md): the
+   confirmation rises and settles once, never loops. Applied via `motion-safe:`,
+   so reduced-motion shows the confirmation instantly with no travel or scale. */
+@keyframes delivery-flash-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+
 /* Caret inside the Room Code cells. Applied via `motion-safe:`, so reduced-motion
    shows a steady caret instead of a blink. */
 @keyframes caret-blink {

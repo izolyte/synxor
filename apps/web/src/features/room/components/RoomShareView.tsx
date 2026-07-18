@@ -7,6 +7,7 @@ import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { DropZone } from "~/features/room/components/DropZone";
 import { TextPasteField } from "~/features/room/components/TextPasteField";
 import { IncomingTransfers } from "~/features/room/components/IncomingTransfers";
+import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket } from "~/features/room/hooks/useRoomSocket";
 import type { RoomRole } from "~/features/room/services/room-session.service";
@@ -34,7 +35,8 @@ export function RoomShareView({
 }) {
   const countdown = useCountdown(expiresAt);
   const livePresenceToken = countdown?.phase === "expired" ? undefined : token;
-  const { status, receiverCount, transfers, texts, sendText } = useRoomSocket(livePresenceToken);
+  const { status, receiverCount, transfers, texts, delivered, sendText } =
+    useRoomSocket(livePresenceToken);
   // Same origin the socket rides; only resolved with a live token (client-only).
   const apiOrigin = livePresenceToken ? resolveApiOrigin(import.meta.env) : undefined;
 
@@ -83,16 +85,22 @@ export function RoomShareView({
 
       {role === "sender" ? (
         <div className="flex flex-col gap-3">
-          <DropZone token={livePresenceToken} apiOrigin={apiOrigin} />
+          <DropZone token={livePresenceToken} apiOrigin={apiOrigin} delivered={delivered} />
           <TextPasteField onSend={sendText} />
         </div>
       ) : (
-        <IncomingTransfers
-          transfers={transfers}
-          texts={texts}
-          token={livePresenceToken}
-          apiOrigin={apiOrigin}
-        />
+        <>
+          <IncomingTransfers
+            transfers={transfers}
+            texts={texts}
+            token={livePresenceToken}
+            apiOrigin={apiOrigin}
+            delivered={delivered}
+          />
+          {/* Receiver-only: the big confirmation moment. The Sender reads Delivery
+              off its own file rows above, not a full-screen flash. */}
+          <DeliveryFlash delivered={delivered} transfers={transfers} />
+        </>
       )}
     </>
   );
