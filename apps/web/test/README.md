@@ -44,6 +44,9 @@ Cypress doesn't fit — its command queue can't run the shared async contract.
 ## Adding capability
 
 The port is intentionally minimal and grows per feature: each feature adds the
-methods it needs (port + both adapters, + conformance if cross-tool). Upcoming:
-socket mock, file upload / drag-drop, fake timers, clipboard, list count,
-keyboard (`tab` / focus), multi-context (two actors).
+methods it needs (port + both adapters, + conformance if cross-tool). The E2E
+happy path (#23) added `attach` (file upload), `currentPath` (read the URL to
+carry a Room Code between actors), and `openActor` (multi-context — a second
+Sender/Receiver actor). Those last two are E2E-only; the jsdom adapters throw.
+Upcoming: socket mock, fake timers, clipboard, list count, keyboard (`tab` /
+focus).

@@ -20,10 +20,11 @@ export function createVitestDriver(): Driver {
   const user = userEvent.setup();
   const screen = makeScreen(user, vitestExpect as unknown as DomExpect);
   const backend = createBackend();
+  // Kept from the last visit so currentPath can report where navigation landed.
+  let router: ReturnType<typeof createRouter> | null = null;
 
   return {
-    find: screen.find,
-    within: screen.within,
+    ...screen,
     backend,
     async seed(state) {
       for (const [key, value] of Object.entries(state.localStorage ?? {})) {
@@ -31,11 +32,14 @@ export function createVitestDriver(): Driver {
       }
     },
     async visit(path) {
-      const router = createRouter({
+      router = createRouter({
         history: createMemoryHistory({ initialEntries: [path] }),
       });
       render(createElement(RouterProvider, { router }));
       await router.load();
+    },
+    async currentPath() {
+      return router?.state.location.href ?? "/";
     },
   };
 }

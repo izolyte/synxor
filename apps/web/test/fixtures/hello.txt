@@ -1,0 +1,1 @@
+synxor e2e fixture — a tiny file the Sender transfers to the Receiver.

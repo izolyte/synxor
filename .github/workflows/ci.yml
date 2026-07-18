@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Lets the opt-in e2e job be triggered by hand from the Actions tab.
+  workflow_dispatch:
 
 # A newer push to the same branch cancels the in-flight run.
 concurrency:
@@ -78,5 +80,44 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
 
-# Note: the e2e job (Playwright against the full Docker Compose stack) lands with
-# #23, once the web Dockerfile + Compose service (#47) exist to build the stack.
+  # Playwright against the full Docker Compose stack (web + api + Postgres + MinIO
+  # + Redis). Heavy, so it's opt-in for now: pushes to main, manual dispatch, or a
+  # PR labelled `e2e`. The full-transfer journey ships pending (skipped) until #20
+  # wires the live Transfer Log — this job runs the render-level scenarios against
+  # the real SSR build meanwhile. Once #20 lands, set E2E_STACK=1 below to turn the
+  # happy path into a live gate, then promote the trigger to all PRs.
+  e2e:
+    name: e2e — Playwright against the Compose stack
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.labels.*.name, 'e2e')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web exec playwright install --with-deps chromium
+      # Compose reads its config from .env; the checked-in example is CI-safe.
+      - run: cp .env.example .env
+      # Build the images and start the stack; api gates web via its healthcheck.
+      - run: docker compose up -d --build --wait
+      - name: Run E2E scenarios
+        env:
+          # Point Playwright at the composed web service (host-mapped :3001) and
+          # start no server of its own.
+          E2E_BASE_URL: http://localhost:3001
+          # E2E_STACK: "1"  # ← flip on once #20 makes the full transfer flow live
+        run: pnpm --filter web test:e2e
+      - name: Dump stack logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

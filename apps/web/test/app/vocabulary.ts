@@ -45,7 +45,27 @@ export const copy = {
     copyLink: "Copy link",
     copiedLink: "Link copied",
     waiting: "Waiting for Receiver",
+    connected: "Receiver connected",
     createNew: "Create a new Room",
+  },
+  // The live transfer surface, split by side: what the Sender does (send a file,
+  // paste text) and what the Receiver does (download, copy). Delivery is the shared
+  // end state both sides land on.
+  transfer: {
+    // Sender's hidden file input inside the drop zone (data-testid).
+    dropZoneInput: "drop-zone-input",
+    compose: {
+      label: "Text or link to send",
+      send: "Send",
+    },
+    // Receiver's incoming actions.
+    download: "Download",
+    copySnippet: "Copy snippet",
+    copied: "Copied",
+    // Shared: the persistent per-row status, paired with an icon so it never rides
+    // on colour alone. Both the Sender's sent row and the Receiver's incoming row
+    // carry it once a Transfer lands.
+    deliveredStatus: "Status: Delivered",
   },
 } as const;
 
@@ -91,10 +111,30 @@ export const selectors = {
     copiedCode: { text: copy.room.copiedCode } as const satisfies ReadonlySelector,
     copiedLink: { text: copy.room.copiedLink } as const satisfies ReadonlySelector,
     waiting: { text: copy.room.waiting } as const satisfies ReadonlySelector,
+    connected: { text: copy.room.connected } as const satisfies ReadonlySelector,
     createNew: {
       role: "link",
       name: copy.room.createNew,
     } as const satisfies ActionableSelector,
+  },
+  transfer: {
+    dropZoneInput: { testId: copy.transfer.dropZoneInput } as const satisfies ActionableSelector,
+    compose: { label: copy.transfer.compose.label } as const satisfies ActionableSelector,
+    send: { role: "button", name: copy.transfer.compose.send } as const satisfies ActionableSelector,
+    // The incoming file's Download is an anchor (role "link"), the snippet Copy a
+    // button — each named by the affordance the Receiver reaches for.
+    download: { role: "link", name: copy.transfer.download } as const satisfies ActionableSelector,
+    copySnippet: {
+      role: "button",
+      name: copy.transfer.copySnippet,
+    } as const satisfies ActionableSelector,
+    copied: { text: copy.transfer.copied } as const satisfies ReadonlySelector,
+    // The status span is labelled, not roled — match it by its accessible name so
+    // one selector serves both the Sender's and the Receiver's Delivered row.
+    delivered: { label: copy.transfer.deliveredStatus } as const satisfies ActionableSelector,
+    // A snippet/link the Receiver received, matched by the content that was sent.
+    incomingText: (content: string) =>
+      ({ text: content }) as const satisfies ReadonlySelector,
   },
 };
 

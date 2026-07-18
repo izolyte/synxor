@@ -122,5 +122,12 @@ export function makeScreen(
         expect,
         async () => tlWithin(await findOne(await scope(), region)),
       ),
+    // Real files off disk are an E2E concern; jsdom has no OS picker to satisfy
+    // from a path. A component test that needs an upload should stage a File
+    // through its own handler instead.
+    attach: () =>
+      Promise.reject(
+        new Error("attach (file upload) is E2E-only — run this journey under Playwright."),
+      ),
   };
 }
