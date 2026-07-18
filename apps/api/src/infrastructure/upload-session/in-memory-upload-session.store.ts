@@ -8,6 +8,9 @@ import { UploadSessionNotFoundError } from '../../domain/transfer/transfer.error
 
 interface MutableSession extends Omit<UploadSession, 'receivedChunks'> {
   receivedChunks: Set<number>;
+  // When the session was reserved. Only the abandoned-session sweep reads it, so
+  // it stays off the public UploadSession shape.
+  openedAt: Date;
 }
 
 @Injectable()
@@ -23,7 +26,7 @@ export class InMemoryUploadSessionStore implements UploadSessionStore {
     }
     if (active >= maxPerRoom) return Promise.resolve(null);
 
-    const session: MutableSession = { ...input, receivedChunks: new Set() };
+    const session: MutableSession = { ...input, receivedChunks: new Set(), openedAt: new Date() };
     this.sessions.set(input.transferId, session);
     return Promise.resolve(snapshot(session));
   }
@@ -43,6 +46,13 @@ export class InMemoryUploadSessionStore implements UploadSessionStore {
   delete(transferId: string): Promise<void> {
     this.sessions.delete(transferId);
     return Promise.resolve();
+  }
+
+  findAbandoned(openedBefore: Date): Promise<UploadSession[]> {
+    const stale = [...this.sessions.values()]
+      .filter((session) => session.openedAt < openedBefore)
+      .map(snapshot);
+    return Promise.resolve(stale);
   }
 }
 

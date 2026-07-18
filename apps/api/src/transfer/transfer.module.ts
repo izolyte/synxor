@@ -3,8 +3,7 @@ import { PersistenceModule } from '../infrastructure/persistence/persistence.mod
 import { SecurityModule } from '../infrastructure/security/security.module';
 import { StorageModule } from '../infrastructure/storage/storage.module';
 import { RoomModule } from '../room/room.module';
-import { UPLOAD_SESSION_STORE } from '../domain/transfer/upload-session';
-import { InMemoryUploadSessionStore } from '../infrastructure/upload-session/in-memory-upload-session.store';
+import { UploadSessionModule } from '../infrastructure/upload-session/upload-session.module';
 import { RoomTokenGuard } from '../common/auth/room-token.guard';
 import { RoomRoleGuard } from '../common/auth/room-role.guard';
 import { ChunkedUploadService } from './chunked-upload.service';
@@ -16,7 +15,7 @@ import { TransferController } from './transfer.controller';
 import { transferOptionsProviders } from './transfer.options';
 
 @Module({
-  imports: [PersistenceModule, SecurityModule, StorageModule, RoomModule],
+  imports: [PersistenceModule, SecurityModule, StorageModule, RoomModule, UploadSessionModule],
   controllers: [TransferController],
   providers: [
     ChunkedUploadService,
@@ -27,7 +26,6 @@ import { transferOptionsProviders } from './transfer.options';
     RoomTokenGuard,
     RoomRoleGuard,
     ...transferOptionsProviders,
-    { provide: UPLOAD_SESSION_STORE, useClass: InMemoryUploadSessionStore },
   ],
 })
 export class TransferModule {}

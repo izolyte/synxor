@@ -40,4 +40,28 @@ export class FakeTransferRepository implements TransferRepository {
   findFilePayloadByTransferId(transferId: string): Promise<FilePayload | null> {
     return Promise.resolve(this.filePayloads.get(transferId) ?? null);
   }
+
+  listStorageKeysByRoomId(roomId: string): Promise<string[]> {
+    const keys = [...this.transfers.values()]
+      .filter((t) => t.roomId === roomId)
+      .map((t) => this.filePayloads.get(t.id)?.storageKey)
+      .filter((key): key is string => key !== undefined);
+    return Promise.resolve(keys);
+  }
+
+  deleteById(id: string): Promise<void> {
+    this.transfers.delete(id);
+    this.filePayloads.delete(id);
+    return Promise.resolve();
+  }
+
+  deleteByRoomId(roomId: string): Promise<void> {
+    for (const transfer of [...this.transfers.values()]) {
+      if (transfer.roomId === roomId) {
+        this.transfers.delete(transfer.id);
+        this.filePayloads.delete(transfer.id);
+      }
+    }
+    return Promise.resolve();
+  }
 }
