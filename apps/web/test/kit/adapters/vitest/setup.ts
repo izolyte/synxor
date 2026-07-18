@@ -40,6 +40,9 @@ document.elementFromPoint ??= (() => null) as typeof document.elementFromPoint;
 // timer to survive the test that scheduled it.
 const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
 const nativeSetTimeout = globalThis.setTimeout;
+// Capture native clearTimeout too: a test using vi.useFakeTimers() swaps the
+// global, and the fake can't clear the real timers we tracked.
+const nativeClearTimeout = globalThis.clearTimeout;
 globalThis.setTimeout = function trackedSetTimeout(
   handler: TimerHandler,
   timeout?: number,
@@ -59,9 +62,13 @@ globalThis.setTimeout = function trackedSetTimeout(
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
-  cleanup();
-  for (const id of pendingTimeouts) clearTimeout(id);
-  pendingTimeouts.clear();
+  // finally: if cleanup() throws on a bad unmount, still clear the leaked timers.
+  try {
+    cleanup();
+  } finally {
+    for (const id of pendingTimeouts) nativeClearTimeout(id);
+    pendingTimeouts.clear();
+  }
   server.resetHandlers();
   localStorage.clear();
   sessionStorage.clear();
