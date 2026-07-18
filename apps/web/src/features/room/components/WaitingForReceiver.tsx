@@ -24,6 +24,10 @@ export function WaitingForReceiver({
   status?: RoomSocketStatus;
   receiverCount?: number;
 }) {
+  // A terminally lost connection is owned by ConnectionAlert; echoing a stale
+  // presence count here would only contradict it.
+  if (status === "lost") return null;
+
   if (status === "disconnected") {
     return (
       <p role="status" className={`${ROW} text-muted-foreground`}>

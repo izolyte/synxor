@@ -1,9 +1,11 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Check, CheckCircle2, File, GripVertical, Image, X } from "lucide-react";
+import { StallNotice } from "~/features/room/components/StallNotice";
 import { TransferProgressBar } from "~/features/room/components/TransferProgressBar";
 import type { QueuedFile } from "~/features/room/hooks/useFileQueue";
 import type { UploadState } from "~/features/room/hooks/useFileUploads";
+import { useTransferStall } from "~/features/room/hooks/useTransferStall";
 import { formatFileSize } from "~/features/room/utils/format-file-size";
 import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/utils/cn";
@@ -44,6 +46,9 @@ export function QueuedFileRow({
   } = useSortable({
     id: queued.id,
   });
+
+  const uploading = upload?.phase === "uploading" ? upload : null;
+  const stall = useTransferStall(uploading?.percent ?? 0, uploading !== null);
 
   // Dragged row reads as physically lifted (scale + shadow), not just dimmed.
   // Scale rides the same `transform` dnd-kit already sets inline (a class-based
@@ -111,12 +116,15 @@ export function QueuedFileRow({
               </span>
             ))}
         </div>
-        {upload?.phase === "uploading" && (
-          <TransferProgressBar
-            percent={upload.percent}
-            label={`Uploading ${queued.file.name}`}
-            compact
-          />
+        {uploading && (
+          <>
+            <TransferProgressBar
+              percent={uploading.percent}
+              label={`Uploading ${queued.file.name}`}
+              compact
+            />
+            <StallNotice state={stall} />
+          </>
         )}
         {upload?.phase === "error" && (
           <span role="status" className="text-xs text-[var(--color-error-text)]">

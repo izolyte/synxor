@@ -10,7 +10,9 @@ import {
   type TransferTextPayload,
 } from "~/features/room/constants/transfer";
 
-export type RoomSocketStatus = "idle" | "connecting" | "connected" | "disconnected";
+// "lost" is terminal: socket.io gave up reconnecting. "disconnected" is the
+// recoverable in-between the UI reads as "Reconnecting…".
+export type RoomSocketStatus = "idle" | "connecting" | "connected" | "disconnected" | "lost";
 
 export interface RoomSocketState {
   status: RoomSocketStatus;
@@ -39,7 +41,7 @@ const initialState: RoomSocketState = {
 
 // Default factory: the real socket. Tests pass a fake to drive events without a
 // server, keeping the hook decoupled from socket.io-client.
-type SocketFactory = (token: string) => Socket;
+export type SocketFactory = (token: string) => Socket;
 
 const defaultFactory: SocketFactory = (token) =>
   createRoomSocket(resolveApiOrigin(import.meta.env), token);
@@ -112,6 +114,9 @@ export function useRoomSocket(
     };
 
     const onDown = () => setState((prev) => ({ ...prev, status: "disconnected" }));
+    // socket.io exhausted its reconnect budget — the Room won't recover on its own.
+    // A later "connect" (manual refresh, network back) still flips it to connected.
+    const onLost = () => setState((prev) => ({ ...prev, status: "lost" }));
 
     socket.on("connect", () => setState((prev) => ({ ...prev, status: "connected" })));
     socket.on("disconnect", onDown);
@@ -119,6 +124,9 @@ export function useRoomSocket(
     // rejected token) would otherwise sit at "connecting" forever, showing a false
     // "Waiting for Receiver". Treat it as disconnected so the UI reads "Reconnecting…".
     socket.on("connect_error", onDown);
+    // Reconnection lifecycle lives on the Manager (socket.io), not the Socket. The
+    // optional chain keeps the test fake (a bare emitter, no Manager) working.
+    socket.io?.on?.("reconnect_failed", onLost);
     socket.on(RoomEvent.Joined, onCount);
     socket.on(RoomEvent.Left, onCount);
     socket.on(TransferEvent.Progress, onProgress);
@@ -126,6 +134,7 @@ export function useRoomSocket(
     socket.on(TransferEvent.Delivered, onDelivered);
 
     return () => {
+      socket.io?.off?.("reconnect_failed", onLost);
       socket.off();
       socket.disconnect();
       socketRef.current = null;

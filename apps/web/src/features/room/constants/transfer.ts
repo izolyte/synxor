@@ -1,5 +1,13 @@
 export const CHUNK_SIZE_BYTES = 256 * 1024;
 
+// Stall thresholds (docs/design/15-edge-cases.md). No chunk movement for
+// STALL_SLOW_MS reads as a slow connection, not a failure. A Transfer parked at
+// or above ALMOST_DONE_PERCENT is a hair from done, so it gets the longer
+// STALL_ALMOST_MS window and the gentler "Almost done…" copy instead.
+export const STALL_SLOW_MS = 10_000;
+export const STALL_ALMOST_MS = 30_000;
+export const ALMOST_DONE_PERCENT = 99;
+
 // Mirrors the API's MAX_TEXT_PAYLOAD_CHARS — the Sender's input is capped here so
 // an over-limit paste is rejected inline before it ever reaches the socket.
 export const MAX_TEXT_PAYLOAD_CHARS = 100_000;

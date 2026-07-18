@@ -1,6 +1,8 @@
 import { CheckCircle2, Download, File as FileIcon } from "lucide-react";
+import { StallNotice } from "~/features/room/components/StallNotice";
 import { TransferProgressBar } from "~/features/room/components/TransferProgressBar";
 import type { TransferProgressPayload } from "~/features/room/constants/transfer";
+import { useTransferStall } from "~/features/room/hooks/useTransferStall";
 import { formatFileSize } from "~/features/room/utils/format-file-size";
 import { buttonVariants } from "~/shared/ui/button";
 import { cn } from "~/shared/utils/cn";
@@ -29,6 +31,8 @@ export function IncomingTransferRow({
     transfer.totalChunks > 0
       ? Math.round((transfer.receivedChunks / transfer.totalChunks) * 100)
       : 0;
+  const receiving = !transfer.complete && !delivered;
+  const stall = useTransferStall(percent, receiving);
 
   return (
     <li className="motion-safe:animate-[message-in_var(--duration-normal)_var(--ease-out)] flex items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-3 py-2 text-sm">
@@ -42,12 +46,15 @@ export function IncomingTransferRow({
             {formatFileSize(transfer.fileSizeBytes)}
           </span>
         </div>
-        {!transfer.complete && !delivered && (
-          <TransferProgressBar
-            percent={percent}
-            label={`Receiving ${transfer.fileName}`}
-            compact
-          />
+        {receiving && (
+          <>
+            <TransferProgressBar
+              percent={percent}
+              label={`Receiving ${transfer.fileName}`}
+              compact
+            />
+            <StallNotice state={stall} />
+          </>
         )}
       </div>
       {delivered ? (
