@@ -1,0 +1,4 @@
+# Local-dev TLS material is generated, never committed — private keys must not
+# land in git. The generator script and this file stay tracked.
+*.crt
+*.key
