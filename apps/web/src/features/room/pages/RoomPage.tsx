@@ -5,6 +5,7 @@ import { ScreenHeader } from "~/shared/components/ScreenHeader";
 import { RoomShareView } from "~/features/room/components/RoomShareView";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { useRoomSession } from "~/features/room/hooks/useRoomSession";
+import { useRoomTransferHistory } from "~/features/room/hooks/useTransferLog";
 import { sessionRole } from "~/features/room/services/room-session.service";
 
 const route = getRouteApi("/room/$roomCode");
@@ -16,6 +17,9 @@ const route = getRouteApi("/room/$roomCode");
 export function RoomPage() {
   const { roomCode } = route.useParams();
   const session = useRoomSession(roomCode);
+  // Fetched at the route so the Transfer Log's history rides the router's query
+  // context; RoomShareView (also rendered bare in tests) takes it as a prop.
+  const transferHistory = useRoomTransferHistory(roomCode);
 
   return (
     <CenteredScreen>
@@ -28,6 +32,7 @@ export function RoomPage() {
             expiresAt={session.session.expiresAt}
             token={session.session.token}
             role={sessionRole(session.session)}
+            transferHistory={transferHistory}
           />
         ) : (
           <RoomNotice

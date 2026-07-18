@@ -4,6 +4,7 @@ import { router, publicProcedure } from '../trpc';
 import { RoomService } from '../../room/room.service';
 import { createRoomSchema } from '../../room/dto/create-room.dto';
 import { joinRoomSchema } from '../../room/dto/join-room.dto';
+import { roomTransfersSchema } from '../../room/dto/room-transfers.dto';
 import { RoomExpiredError, RoomNotFoundError } from '../../domain/room/room.errors';
 
 @Injectable()
@@ -27,6 +28,18 @@ export class RoomRouter {
           // fault — surface NOT_FOUND so the web client can tell it apart from a 5xx
           // and react accordingly (retype vs retry).
           if (err instanceof RoomNotFoundError || err instanceof RoomExpiredError) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: err.message, cause: err });
+          }
+          throw err;
+        }
+      }),
+      transfers: publicProcedure.input(roomTransfersSchema).query(async ({ input }) => {
+        try {
+          return await this.roomService.listTransfers(input.roomCode);
+        } catch (err) {
+          // Same "bad code" contract as join: a missing Room is client-visible,
+          // not a 5xx — the web Log falls back to live-only data on NOT_FOUND.
+          if (err instanceof RoomNotFoundError) {
             throw new TRPCError({ code: 'NOT_FOUND', message: err.message, cause: err });
           }
           throw err;

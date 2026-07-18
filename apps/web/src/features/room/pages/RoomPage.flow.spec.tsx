@@ -89,4 +89,27 @@ suite("Room view", () => {
     await driver.find(selectors.room.heading("unavailable")).shouldBeVisible();
     await driver.find(selectors.room.createNew).shouldBeVisible();
   });
+
+  test("populates the Transfer Log from the room.transfers history on mount", async () => {
+    roomSessionService.store("LOG123", {
+      token: "tok-1",
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      role: "receiver",
+    });
+    const driver = createVitestDriver();
+    await driver.backend.rpc("room.transfers").resolves([
+      {
+        id: "t-hist",
+        payloadType: "FILE",
+        fileName: "history.pdf",
+        fileSizeBytes: 1024,
+        delivered: true,
+        createdAt: "2026-01-01T10:00:00.000Z",
+      },
+    ]);
+
+    await driver.visit("/room/LOG123");
+
+    await driver.find({ text: "history.pdf" }).shouldBeVisible();
+  });
 });

@@ -1,5 +1,19 @@
 export const CHUNK_SIZE_BYTES = 256 * 1024;
 
+// Transfer Log switches to windowed rendering past this many rows
+// (docs/design/15-edge-cases.md). Below it, every row is in the DOM so roving
+// focus and find-in-page just work.
+export const TRANSFER_LOG_VIRTUALIZE_THRESHOLD = 100;
+
+// Estimated Transfer Row height for the virtualizer (docs/design/10-components.md
+// sizes Log rows at ~48px). Rows are near-fixed height, so a flat estimate keeps
+// scroll math simple without per-row measurement.
+export const TRANSFER_LOG_ROW_HEIGHT = 48;
+
+// Height the Log scroll area caps at before it scrolls, in px. Doubles as the
+// virtualizer's seed viewport so the first paint fills a window.
+export const TRANSFER_LOG_MAX_HEIGHT = 352;
+
 // Mirrors the API's MAX_TEXT_PAYLOAD_CHARS — the Sender's input is capped here so
 // an over-limit paste is rejected inline before it ever reaches the socket.
 export const MAX_TEXT_PAYLOAD_CHARS = 100_000;

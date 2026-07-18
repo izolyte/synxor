@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import {
   ArrowLeftRight,
   Ban,
@@ -13,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { formatFileSize } from "~/features/room/utils/format-file-size";
+import { formatTransferTime } from "~/features/room/utils/format-time";
 import { buttonVariants } from "~/shared/ui/button";
 import { cn } from "~/shared/utils/cn";
 
@@ -134,22 +136,45 @@ function TransferRowAction({
 }
 
 /**
- * One row in the Transfer Log: payload icon, name, size, status pill, and the
- * action that fits the payload. Presentational — the Log (#20) feeds it data
- * and wires the copy handler. Row appears with the "Transfer Log row" entrance
- * (docs/design/07-motion.md).
+ * One row in the Transfer Log: payload icon, name, size, status pill, timestamp,
+ * and the action that fits the payload. Presentational — the Log (#20) feeds it
+ * data, wires the copy handler, and drives roving focus via `index`/`tabIndex`
+ * (docs/design/09-focus-keyboard.md). Row appears with the "Transfer Log row"
+ * entrance (docs/design/07-motion.md).
+ *
+ * `receivedAt` is the millisecond timestamp for the timestamp column; the column
+ * hides below `md` (docs/design/10-components.md). `index`/`tabIndex` are absent
+ * outside the Log, leaving the row non-focusable.
  */
 export function TransferRow({
   transfer,
   onCopy,
+  receivedAt,
+  index,
+  tabIndex,
+  style,
 }: {
   transfer: TransferRowData;
   onCopy?: (value: string) => void;
+  receivedAt?: number;
+  index?: number;
+  tabIndex?: number;
+  /** Absolute-positioning style for the row when the Log virtualizes. */
+  style?: CSSProperties;
 }) {
   const PayloadIcon = PAYLOAD_ICON[transfer.kind];
 
   return (
-    <li className="motion-safe:animate-[message-in_var(--duration-normal)_var(--ease-out)] flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-sm transition-colors hover:bg-[var(--color-bg-subtle)]">
+    <li
+      data-index={index}
+      tabIndex={tabIndex}
+      style={style}
+      className={cn(
+        "motion-safe:animate-[message-in_var(--duration-normal)_var(--ease-out)] flex items-center gap-3",
+        "rounded-[var(--radius-md)] px-3 py-2 text-sm transition-colors hover:bg-[var(--color-bg-subtle)]",
+        "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+      )}
+    >
       <PayloadIcon aria-hidden="true" size={20} className="shrink-0 text-[var(--color-ink-muted)]" />
       <span dir="auto" title={transfer.name} className="min-w-0 flex-1 truncate">
         {transfer.name}
@@ -160,6 +185,14 @@ export function TransferRow({
         </span>
       )}
       <TransferStatusPill status={transfer.status} />
+      {receivedAt !== undefined && (
+        <time
+          dateTime={new Date(receivedAt).toISOString()}
+          className="hidden shrink-0 text-xs text-[var(--color-ink-muted)] tabular-nums md:inline"
+        >
+          {formatTransferTime(receivedAt)}
+        </time>
+      )}
       <TransferRowAction transfer={transfer} onCopy={onCopy} />
     </li>
   );
