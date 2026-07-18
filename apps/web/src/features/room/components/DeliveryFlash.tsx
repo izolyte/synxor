@@ -21,41 +21,49 @@ export function DeliveryFlash({
   displayMs?: number;
 }) {
   const flash = useDeliveryFlash(delivered, transfers, displayMs);
-  if (!flash) return null;
 
   return (
-    <div
-      className="pointer-events-none fixed inset-0 z-[var(--z-toast)] flex items-center justify-center p-[var(--space-6)]"
-      style={{ paddingBottom: "calc(var(--space-6) + env(safe-area-inset-bottom))" }}
-    >
-      <div
-        // Re-keyed per delivery so a back-to-back flash replays the entrance
-        // instead of sitting static.
-        key={flash.transferId}
-        role="status"
-        aria-live="polite"
-        className="flex flex-col items-center gap-[var(--space-3)] rounded-[var(--radius-lg)] border border-[var(--color-success-border)] bg-[var(--color-surface-raised)] px-[var(--space-8)] py-[var(--space-6)] text-center shadow-[var(--shadow-xl)] motion-safe:animate-[delivery-flash-in_var(--duration-slow)_var(--ease-out)]"
-      >
-        <CheckCircle2
-          aria-hidden="true"
-          size={48}
-          strokeWidth={2}
-          className="text-[var(--color-success)]"
-        />
-        <div className="flex flex-col gap-[var(--space-1)]">
-          <span className="text-[length:var(--text-lg)] font-semibold text-[var(--color-ink)]">
-            Delivered
-          </span>
-          {flash.fileName && (
-            <span
-              dir="auto"
-              className="max-w-[min(20rem,70vw)] truncate text-[length:var(--text-sm)] text-[var(--color-ink-muted)]"
-            >
-              {flash.fileName}
-            </span>
-          )}
+    <>
+      {/* A live region only announces changes made while it's already in the DOM,
+          so it stays mounted and empty — the visual flash below carries no
+          aria-live of its own, keeping the announcement to one voice. */}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {flash && `Transfer delivered${flash.fileName ? `: ${flash.fileName}` : ""}`}
+      </span>
+
+      {flash && (
+        <div
+          className="pointer-events-none fixed inset-0 z-[var(--z-toast)] flex items-center justify-center p-[var(--space-6)]"
+          style={{ paddingBottom: "calc(var(--space-6) + env(safe-area-inset-bottom))" }}
+        >
+          <div
+            // Re-keyed per delivery so a back-to-back flash replays the entrance
+            // instead of sitting static.
+            key={flash.transferId}
+            className="flex flex-col items-center gap-[var(--space-3)] rounded-[var(--radius-lg)] border border-[var(--color-success-border)] bg-[var(--color-surface-raised)] px-[var(--space-8)] py-[var(--space-6)] text-center shadow-[var(--shadow-xl)] motion-safe:animate-[delivery-flash-in_var(--duration-slow)_var(--ease-out)]"
+          >
+            <CheckCircle2
+              aria-hidden="true"
+              size={48}
+              strokeWidth={2}
+              className="text-[var(--color-success)]"
+            />
+            <div className="flex flex-col gap-[var(--space-1)]">
+              <span className="text-[length:var(--text-lg)] font-semibold text-[var(--color-ink)]">
+                Delivered
+              </span>
+              {flash.fileName && (
+                <span
+                  dir="auto"
+                  className="max-w-[min(20rem,70vw)] truncate text-[length:var(--text-sm)] text-[var(--color-ink-muted)]"
+                >
+                  {flash.fileName}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }

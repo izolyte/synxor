@@ -40,18 +40,18 @@ function Harness({
 }
 
 suite("DeliveryFlash", () => {
-  test("raises a Delivered flash naming the file when a delivery lands", async () => {
+  test("raises a Delivered flash naming the file, and announces it politely", async () => {
     const screen = renderComponent(<Harness displayMs={1000} />);
 
-    // Nothing before a delivery — the flash is for a live moment, not a resting state.
-    await screen.find({ role: "status" }).shouldNotExist();
+    // The live region is always mounted (so it can announce a change), but the
+    // visible flash is only there for a live delivery, not as a resting state.
+    await screen.find({ text: "Delivered" }).shouldNotExist();
 
     await screen.find({ role: "button", name: "deliver" }).click();
 
-    const flash = screen.find({ role: "status" });
-    await flash.shouldBeVisible();
-    await flash.shouldHaveText("Delivered");
+    await screen.find({ text: "Delivered" }).shouldBeVisible();
     await screen.find({ text: "photo.jpg" }).shouldBeVisible();
+    await screen.find({ role: "status" }).shouldHaveText("Transfer delivered: photo.jpg");
   });
 
   test("still confirms delivery when the file name isn't known yet", async () => {
@@ -59,18 +59,19 @@ suite("DeliveryFlash", () => {
 
     await screen.find({ role: "button", name: "deliver" }).click();
 
-    await screen.find({ role: "status" }).shouldHaveText("Delivered");
+    await screen.find({ text: "Delivered" }).shouldBeVisible();
     await screen.find({ text: "photo.jpg" }).shouldNotExist();
+    await screen.find({ role: "status" }).shouldHaveText("Transfer delivered");
   });
 
   test("clears itself after its window so it fires once, never lingering", async () => {
     const screen = renderComponent(<Harness displayMs={30} />);
 
     await screen.find({ role: "button", name: "deliver" }).click();
-    await screen.find({ role: "status" }).shouldBeVisible();
+    await screen.find({ text: "Delivered" }).shouldBeVisible();
 
     // waitFor flushes the timer-driven removal inside act, then confirms it's gone.
-    await waitFor(() => expect(rtlScreen.queryByRole("status")).toBeNull());
+    await waitFor(() => expect(rtlScreen.queryByText("Delivered")).toBeNull());
   });
 
   test("doesn't replay deliveries that were already done on mount", async () => {
@@ -78,10 +79,10 @@ suite("DeliveryFlash", () => {
 
     // A delivery from before this Receiver was looking is history, not a flash.
     await delay(20);
-    await screen.find({ role: "status" }).shouldNotExist();
+    await screen.find({ text: "Delivered" }).shouldNotExist();
 
     // A fresh delivery after mount still flashes.
     await screen.find({ role: "button", name: "deliver" }).click();
-    await screen.find({ role: "status" }).shouldBeVisible();
+    await screen.find({ text: "Delivered" }).shouldBeVisible();
   });
 });
