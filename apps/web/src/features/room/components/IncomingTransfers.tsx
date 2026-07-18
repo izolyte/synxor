@@ -18,11 +18,14 @@ export function IncomingTransfers({
   texts,
   token,
   apiOrigin,
+  delivered,
 }: {
   transfers: TransferProgressPayload[];
   texts: TransferTextPayload[];
   token: string | undefined;
   apiOrigin: string | undefined;
+  /** transferIds this Receiver has finished downloading. */
+  delivered: ReadonlySet<string>;
 }) {
   const canDownload = Boolean(token && apiOrigin);
   const showFiles = canDownload && transfers.length > 0;
@@ -46,6 +49,7 @@ export function IncomingTransfers({
             key={transfer.transferId}
             transfer={transfer}
             downloadHref={downloadUrl(apiOrigin as string, transfer.transferId, token as string)}
+            delivered={delivered.has(transfer.transferId)}
           />
         ))}
     </ul>

@@ -53,7 +53,10 @@ function Harness({
   // Local so a button can swap the token mid-test (a rejoin gets a new one).
   const [token, setToken] = useState(initialToken);
   const factory = useMemo(() => () => socket as unknown as Socket, [socket]);
-  const { status, receiverCount, transfers, texts, sendText } = useRoomSocket(token, factory);
+  const { status, receiverCount, transfers, texts, delivered, sendText } = useRoomSocket(
+    token,
+    factory,
+  );
   return (
     <>
       <output data-testid="status">{status}</output>
@@ -63,6 +66,9 @@ function Harness({
         {transfers.length === 0
           ? "none"
           : transfers.map((t) => `${t.transferId}:${t.receivedChunks}/${t.totalChunks}`).join(" ")}
+      </output>
+      <output data-testid="delivered">
+        {delivered.size === 0 ? "none" : [...delivered].join(" ")}
       </output>
       <output data-testid="texts">
         {texts.length === 0
@@ -92,6 +98,12 @@ function Harness({
       <button onClick={() => socket.emit(TransferEvent.Progress, progress("b", 1))}>send-b1</button>
       <button onClick={() => socket.emit(TransferEvent.Progress, { fileName: "no-id.txt" })}>
         send-malformed
+      </button>
+      <button onClick={() => socket.emit(TransferEvent.Delivered, { transferId: "a" })}>
+        deliver-a
+      </button>
+      <button onClick={() => socket.emit(TransferEvent.Delivered, { note: "no-id" })}>
+        deliver-malformed
       </button>
       <button onClick={() => setToken("tok-2")}>retoken</button>
     </>
@@ -193,6 +205,34 @@ suite("useRoomSocket", () => {
     await screen.find({ role: "button", name: "recv-text" }).click();
 
     await screen.find({ testId: "texts" }).shouldHaveText("LINK:https://example.com");
+  });
+
+  test("records a transfer:delivered once, ignoring a replayed duplicate", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "deliver-a" }).click();
+    await screen.find({ testId: "delivered" }).shouldHaveText("a");
+
+    // A reconnect could replay the same event; the Set keeps it idempotent.
+    await screen.find({ role: "button", name: "deliver-a" }).click();
+    await screen.find({ testId: "delivered" }).shouldHaveText("a");
+  });
+
+  test("drops a malformed delivered payload (no transferId)", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "deliver-malformed" }).click();
+    await screen.find({ testId: "delivered" }).shouldHaveText("none");
+  });
+
+  test("clears delivered ids when the token changes (new session, new Room)", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "deliver-a" }).click();
+    await screen.find({ testId: "delivered" }).shouldHaveText("a");
+
+    await screen.find({ role: "button", name: "retoken" }).click();
+    await screen.find({ testId: "delivered" }).shouldHaveText("none");
   });
 
   test("sendText emits the payload over the socket", async () => {

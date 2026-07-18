@@ -17,10 +17,14 @@ function transfer(overrides: Partial<TransferProgressPayload> = {}): TransferPro
   };
 }
 
-function row(incoming: TransferProgressPayload) {
+function row(incoming: TransferProgressPayload, delivered = false) {
   return (
     <ul>
-      <IncomingTransferRow transfer={incoming} downloadHref="http://api.test/dl" />
+      <IncomingTransferRow
+        transfer={incoming}
+        downloadHref="http://api.test/dl"
+        delivered={delivered}
+      />
     </ul>
   );
 }
@@ -60,5 +64,16 @@ suite("IncomingTransferRow", () => {
     const link = screen.find({ role: "link", name: "Download" });
     await link.shouldHaveAttribute("href", "http://api.test/dl");
     await link.shouldHaveAttribute("download", "video.mp4");
+  });
+
+  test("settles into a Delivered state once this Receiver has the file", async () => {
+    const screen = renderComponent(row(transfer({ complete: true }), true));
+
+    // The download is done, so the link gives way to a labelled Delivered marker
+    // that outlives the Delivery flash — and no lingering progress bar.
+    await screen.find({ text: "Delivered" }).shouldBeVisible();
+    await screen.find({ role: "link", name: "Download" }).shouldNotExist();
+    expect(rtlScreen.getByLabelText("Status: Delivered")).toBeVisible();
+    expect(rtlScreen.queryByRole("progressbar")).toBeNull();
   });
 });

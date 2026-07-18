@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, File, GripVertical, Image, X } from "lucide-react";
+import { Check, CheckCircle2, File, GripVertical, Image, X } from "lucide-react";
 import { TransferProgressBar } from "~/features/room/components/TransferProgressBar";
 import type { QueuedFile } from "~/features/room/hooks/useFileQueue";
 import type { UploadState } from "~/features/room/hooks/useFileUploads";
@@ -17,17 +17,21 @@ function FileTypeIcon({ mimeType }: { mimeType: string }) {
 /**
  * One queued file: dnd-kit sortable row (drag handle reorders the send queue).
  * `upload` reflects the row's live transfer state — a progress bar while
- * uploading, a Sent check when done, the failure message when it errors. Status
- * always pairs icon/text with color, never color alone.
+ * uploading, a Sent check when done, the failure message when it errors. Once
+ * the Receiver finishes pulling it (`delivered`), Sent becomes Delivered — the
+ * Sender's confirmation their file actually landed. Status always pairs icon/text
+ * with color, never color alone.
  */
 export function QueuedFileRow({
   queued,
   onRemove,
   upload,
+  delivered = false,
 }: {
   queued: QueuedFile;
   onRemove: (id: string) => void;
   upload?: UploadState;
+  delivered?: boolean;
 }) {
   const {
     attributes,
@@ -91,12 +95,21 @@ export function QueuedFileRow({
               {queued.warning}
             </span>
           )}
-          {upload?.phase === "done" && (
-            <span className="flex shrink-0 items-center gap-1 text-xs text-[var(--color-success)]">
-              <Check aria-hidden="true" size={14} />
-              Sent
-            </span>
-          )}
+          {upload?.phase === "done" &&
+            (delivered ? (
+              <span
+                aria-label="Status: Delivered"
+                className="flex shrink-0 items-center gap-1 text-xs font-medium text-[var(--color-success)]"
+              >
+                <CheckCircle2 aria-hidden="true" size={14} />
+                Delivered
+              </span>
+            ) : (
+              <span className="flex shrink-0 items-center gap-1 text-xs text-[var(--color-success)]">
+                <Check aria-hidden="true" size={14} />
+                Sent
+              </span>
+            ))}
         </div>
         {upload?.phase === "uploading" && (
           <TransferProgressBar

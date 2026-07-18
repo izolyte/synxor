@@ -85,6 +85,25 @@ suite("QueuedFileRow", () => {
     expect(rtlScreen.queryByRole("progressbar")).toBeNull();
   });
 
+  test("promotes Sent to Delivered once the Receiver has pulled the file", async () => {
+    const screen = renderComponent(
+      withDndContext(
+        <QueuedFileRow
+          queued={queued()}
+          onRemove={() => {}}
+          upload={{ phase: "done", transferId: "t1" }}
+          delivered
+        />,
+      ),
+    );
+
+    // The stronger confirmation replaces Sent; labelled for assistive tech, so the
+    // state never rides on color alone.
+    await screen.find({ text: "Delivered" }).shouldBeVisible();
+    await screen.find({ text: "Sent" }).shouldNotExist();
+    expect(rtlScreen.getByLabelText("Status: Delivered")).toBeVisible();
+  });
+
   test("announces an upload failure on the row", async () => {
     const screen = renderComponent(
       withDndContext(

@@ -37,11 +37,15 @@ export function DropZone({
   token,
   apiOrigin,
   uploader,
+  delivered,
 }: {
   token?: string;
   apiOrigin?: string;
   /** Test seam; production uses the real chunked uploader. */
   uploader?: Uploader;
+  /** transferIds a Receiver has finished downloading — flips a Sent row to
+   *  Delivered. Absent (no live socket, tests) leaves rows at Sent. */
+  delivered?: ReadonlySet<string>;
 }) {
   const { files, notice, addFiles, rejectFolder, removeFile, reorderFiles } = useFileQueue();
   const uploads = useFileUploads(files, token, apiOrigin, uploader);
@@ -157,14 +161,20 @@ export function DropZone({
             strategy={verticalListSortingStrategy}
           >
             <ul role="list" className="flex flex-col gap-1.5">
-              {files.map((queued) => (
-                <QueuedFileRow
-                  key={queued.id}
-                  queued={queued}
-                  onRemove={removeFile}
-                  upload={uploads.get(queued.id)}
-                />
-              ))}
+              {files.map((queued) => {
+                const upload = uploads.get(queued.id);
+                return (
+                  <QueuedFileRow
+                    key={queued.id}
+                    queued={queued}
+                    onRemove={removeFile}
+                    upload={upload}
+                    delivered={
+                      upload?.phase === "done" && (delivered?.has(upload.transferId) ?? false)
+                    }
+                  />
+                );
+              })}
             </ul>
           </SortableContext>
         </DndContext>

@@ -5,6 +5,7 @@ import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import { RoomEvent, type RoomPresencePayload } from "~/features/room/constants/room-events";
 import {
   TransferEvent,
+  type TransferDeliveredPayload,
   type TransferProgressPayload,
   type TransferTextPayload,
 } from "~/features/room/constants/transfer";
@@ -18,6 +19,9 @@ export interface RoomSocketState {
   transfers: TransferProgressPayload[];
   /** Text Snippets / Links received over the socket, in arrival order. */
   texts: TransferTextPayload[];
+  /** transferIds a Receiver has finished downloading. Drives the delivered
+   *  states (Sender row, Receiver row) and the one-shot Delivery flash. */
+  delivered: ReadonlySet<string>;
 }
 
 export interface RoomSocket extends RoomSocketState {
@@ -30,6 +34,7 @@ const initialState: RoomSocketState = {
   receiverCount: 0,
   transfers: [],
   texts: [],
+  delivered: new Set(),
 };
 
 // Default factory: the real socket. Tests pass a fake to drive events without a
@@ -95,6 +100,17 @@ export function useRoomSocket(
       );
     };
 
+    // Mark a Transfer delivered once. The server fires this at most once per
+    // transfer, but a reconnect could replay it — a Set keeps it idempotent so
+    // the flash never re-fires for an id already seen.
+    const onDelivered = (payload: TransferDeliveredPayload) => {
+      if (typeof payload?.transferId !== "string") return;
+      setState((prev) => {
+        if (prev.delivered.has(payload.transferId)) return prev;
+        return { ...prev, delivered: new Set(prev.delivered).add(payload.transferId) };
+      });
+    };
+
     const onDown = () => setState((prev) => ({ ...prev, status: "disconnected" }));
 
     socket.on("connect", () => setState((prev) => ({ ...prev, status: "connected" })));
@@ -107,6 +123,7 @@ export function useRoomSocket(
     socket.on(RoomEvent.Left, onCount);
     socket.on(TransferEvent.Progress, onProgress);
     socket.on(TransferEvent.Text, onText);
+    socket.on(TransferEvent.Delivered, onDelivered);
 
     return () => {
       socket.off();
