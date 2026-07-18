@@ -1,0 +1,133 @@
+name: CD
+
+# Runs after a merge lands on main. CI (#24) gates the PR via required status
+# checks, so by the time a commit reaches main it has already passed
+# lint/typecheck/build/test — this workflow is the post-merge build + ship half.
+on:
+  push:
+    branches: [main]
+
+# Let an in-flight deploy finish rather than cancelling it mid-restart; a newer
+# merge just queues behind it.
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    name: build · push ${{ matrix.app }} → GHCR
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: api
+            dockerfile: apps/api/Dockerfile
+          - app: web
+            dockerfile: apps/web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.app }}
+          # Immutable per-commit tag (sha-<short>) for rollbacks, plus a moving
+          # `latest` the VPS pulls on deploy.
+          tags: |
+            type=sha
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # web bakes the browser-facing API origin into its client bundle at
+          # build time (Vite inlines VITE_API_URL), so it must be the public
+          # production origin — set it as a repo variable. api takes no build args.
+          build-args: ${{ matrix.app == 'web' && format('VITE_API_URL={0}', vars.VITE_API_URL) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: deploy → VPS (docker compose up)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Guard: only runs once a VPS target is wired up. Set the DEPLOY_ENABLED repo
+    # variable to 'true' after adding the secrets below. Until then the build
+    # half still runs and the pipeline stays green (forks, pre-infra state).
+    #
+    # Conceptually this job should also wait on the Playwright e2e gate (#23);
+    # once that workflow exists, gate this via `workflow_run` on its success.
+    if: vars.DEPLOY_ENABLED == 'true'
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Ship the committed production topology to the host so the VPS always runs
+      # image refs from git, not whatever is lying around on disk.
+      - name: Copy prod compose to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: deploy/docker-compose.prod.yml
+          target: ${{ secrets.DEPLOY_PATH }}
+          strip_components: 1
+      - name: Pull images, restart stack, health-check
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          # Forwarded to the remote shell via `envs:` so secrets never get
+          # interpolated into the script text (keeps them out of remote logs).
+          REGISTRY: ${{ env.REGISTRY }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_SHA: ${{ github.sha }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: REGISTRY,REGISTRY_USER,REGISTRY_TOKEN,IMAGE_SHA,DEPLOY_PATH
+          script: |
+            set -euo pipefail
+            cd "$DEPLOY_PATH"
+            echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
+            # Pin the stack to this commit's images (metadata-action emits a
+            # 7-char short-sha tag). Falls back to `latest` inside the compose.
+            export SYNXOR_IMAGE_TAG="sha-$(echo "$IMAGE_SHA" | cut -c1-7)"
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker logout "$REGISTRY" || true
+            # Fail the deploy if the api never reports healthy (~60s budget).
+            for i in $(seq 1 30); do
+              if curl -fsS "http://localhost:${API_PORT:-3000}/health" | grep -q '"status":"ok"'; then
+                echo "health check passed"
+                exit 0
+              fi
+              echo "waiting for api health ($i/30)…"
+              sleep 2
+            done
+            echo "::error::api /health did not return {\"status\":\"ok\"} after deploy"
+            docker compose -f docker-compose.prod.yml logs --tail=50 api || true
+            exit 1
