@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Socket } from "socket.io-client";
+import { expect } from "vitest";
 import { renderComponent } from "~test/kit/component";
 import { suite, test } from "~test/kit";
 import { useRoomSocket } from "~/features/room/hooks/useRoomSocket";
@@ -12,6 +13,8 @@ type Handler = (payload?: unknown) => void;
 // act() — driving the hook the way a real server would, without a socket.
 class FakeSocket {
   private readonly handlers = new Map<string, Handler>();
+  // Outgoing emits the hook makes (e.g. sendText), so a test can assert them.
+  readonly sent: Array<{ event: string; payload?: unknown }> = [];
   on(event: string, cb: Handler): this {
     this.handlers.set(event, cb);
     return this;
@@ -24,6 +27,7 @@ class FakeSocket {
     return this;
   }
   emit(event: string, payload?: unknown): void {
+    this.sent.push({ event, payload });
     this.handlers.get(event)?.(payload);
   }
 }
@@ -49,7 +53,7 @@ function Harness({
   // Local so a button can swap the token mid-test (a rejoin gets a new one).
   const [token, setToken] = useState(initialToken);
   const factory = useMemo(() => () => socket as unknown as Socket, [socket]);
-  const { status, receiverCount, transfers } = useRoomSocket(token, factory);
+  const { status, receiverCount, transfers, texts, sendText } = useRoomSocket(token, factory);
   return (
     <>
       <output data-testid="status">{status}</output>
@@ -60,6 +64,23 @@ function Harness({
           ? "none"
           : transfers.map((t) => `${t.transferId}:${t.receivedChunks}/${t.totalChunks}`).join(" ")}
       </output>
+      <output data-testid="texts">
+        {texts.length === 0
+          ? "none"
+          : texts.map((t) => `${t.payloadType}:${t.content}`).join(" ")}
+      </output>
+      <button
+        onClick={() =>
+          socket.emit(TransferEvent.Text, {
+            transferId: "x1",
+            payloadType: "LINK",
+            content: "https://example.com",
+          })
+        }
+      >
+        recv-text
+      </button>
+      <button onClick={() => sendText("hello world")}>send-text</button>
       <button onClick={() => socket.emit("connect")}>connect</button>
       <button onClick={() => socket.emit("disconnect")}>drop</button>
       <button onClick={() => socket.emit("connect_error")}>fail</button>
@@ -164,5 +185,25 @@ suite("useRoomSocket", () => {
 
     await screen.find({ testId: "transfers" }).shouldHaveText("none");
     await screen.find({ testId: "status" }).shouldHaveText("connecting");
+  });
+
+  test("appends an incoming Text/Link payload", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "recv-text" }).click();
+
+    await screen.find({ testId: "texts" }).shouldHaveText("LINK:https://example.com");
+  });
+
+  test("sendText emits the payload over the socket", async () => {
+    const socket = new FakeSocket();
+    const screen = renderComponent(<Harness token="tok" socket={socket} />);
+
+    await screen.find({ role: "button", name: "send-text" }).click();
+
+    expect(socket.sent).toContainEqual({
+      event: "transfer:text:send",
+      payload: { text: "hello world" },
+    });
   });
 });

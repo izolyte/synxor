@@ -77,7 +77,7 @@ suite("Room view", () => {
     await driver.visit("/room/RCV123");
 
     await driver
-      .find({ text: "Files the Sender shares will appear here, ready to download." })
+      .find({ text: "Files, text, and links the Sender shares will appear here." })
       .shouldBeVisible();
     await driver.find({ testId: "drop-zone" }).shouldNotExist();
   });
