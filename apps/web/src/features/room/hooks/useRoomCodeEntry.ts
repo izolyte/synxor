@@ -30,6 +30,7 @@ export function useRoomCodeEntry({
   const [shaking, setShaking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const submitLockRef = useRef(false);
+  const prefillSubmittedRef = useRef(false);
   const complete = code.length === ROOM_CODE_LENGTH;
 
   // A rejected code clears the cells, shakes the row (the OTP convention for "try
@@ -58,6 +59,16 @@ export function useRoomCodeEntry({
     },
     [pending, onJoin],
   );
+
+  // A code that arrives already complete — the shared-link `/join?code=…` prefill —
+  // submits itself once. Typed codes fire onComplete on the sixth character; a
+  // prefill never does, so without this the Receiver just stares at a filled form.
+  useEffect(() => {
+    if (prefillSubmittedRef.current) return;
+    if (sanitizedInitialCode.length !== ROOM_CODE_LENGTH) return;
+    prefillSubmittedRef.current = true;
+    submit(sanitizedInitialCode);
+  }, [sanitizedInitialCode, submit]);
 
   const change = useCallback(
     (next: string) => {
