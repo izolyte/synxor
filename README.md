@@ -27,7 +27,7 @@ Every existing tool either requires an account, caps file size behind a paywall,
 - Docker Engine 24+
 - Docker Compose v2
 - 1 GB RAM minimum
-- Ports 80 and 443 available (or configure `API_PORT`)
+- Ports 80 and 443 available (or configure `HTTP_PORT` / `HTTPS_PORT`)
 
 ## Quick start
 
@@ -36,12 +36,13 @@ git clone https://github.com/izolyte/synxor.git
 cd synxor
 cp .env.example .env
 # Edit .env — set POSTGRES_PASSWORD and MINIO_ROOT_PASSWORD at minimum
+sh nginx/certs/generate-dev-cert.sh   # self-signed cert for local HTTPS
 docker compose up -d
 ```
 
-Visit `http://localhost:3000/health` — you should see `{ "status": "ok" }`.
+Open **`https://localhost`** — accept the self-signed certificate warning (local dev only) and you'll land on the app: create a Room, share the code, send a file. The API health probe is at `https://localhost/health`.
 
-> **Note:** The UI is not yet available. Phase 1 ships the API and infrastructure only. The full transfer UI ships at v0.1.0.
+Everything is reached through the nginx proxy on ports 80/443; api and web stay internal to the Docker network.
 
 ## Environment variables
 
@@ -49,10 +50,10 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 
 | Variable | Default | Description |
 |---|---|---|
-| `API_PORT` | `3000` | Port the NestJS API listens on |
-| `WEB_PORT` | `3001` | Host port for the SSR web container |
-| `VITE_API_URL` | `http://localhost:3000` | Public API origin baked into the web client bundle at build time (browser-reachable) |
-| `ALLOWED_ORIGINS` | `http://localhost:3001` | HTTP CORS allowlist; must include the web origin |
+| `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Host ports the nginx proxy publishes |
+| `VITE_API_URL` | `https://localhost` | The one canonical public origin (the proxy). Baked into the web bundle at build time — include the port if `HTTPS_PORT` isn't 443 |
+| `ALLOWED_ORIGINS` | `https://localhost` | HTTP CORS allowlist; must include the public origin |
+| `WS_ALLOWED_ORIGINS` | `https://localhost` | Socket.io CORS allowlist; **required in production** (the API refuses to default to `*`) |
 | `POSTGRES_PASSWORD` | — | **Required.** PostgreSQL password |
 | `POSTGRES_USER` | `synxor` | PostgreSQL user |
 | `POSTGRES_DB` | `synxor` | PostgreSQL database name |
@@ -69,6 +70,19 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 | Database | PostgreSQL 17 + Prisma |
 | Storage | MinIO (S3-compatible — swap to AWS S3 or R2 via env vars) |
 | Infra | Docker Compose + Nginx |
+
+## Deployment
+
+**Self-host** (root `docker-compose.yml`) builds the images locally and fronts them with nginx (TLS, HTTP→HTTPS redirect, rate limiting, body cap) — one box, one `docker compose up`.
+
+**CI/CD.** Every merge to `main` builds and pushes `synxor-api` / `synxor-web` images to GHCR (`.github/workflows/cd.yml`). The deploy job that ships them to a host is gated off by default — enable it with:
+
+1. Repo **variable** `DEPLOY_ENABLED=true` and `VITE_API_URL` set to your public origin (baked into the web bundle).
+2. Repo **secrets** `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`.
+
+On merge it SCPs `deploy/docker-compose.prod.yml` to the host, pulls the commit's images, restarts the stack, and health-checks the api.
+
+> **Heads-up.** The production compose (`deploy/`) currently publishes api/web on host ports and does **not** terminate TLS in-stack — put your own TLS/reverse-proxy in front (a cloud load balancer, Caddy, or the bundled `nginx/` config). Bringing the dev nginx topology to production is tracked in [#82](https://github.com/izolyte/synxor/issues/82). Note also that the nginx-fronted stack does not currently come up cleanly ([#81](https://github.com/izolyte/synxor/issues/81)) — resolve that before a real deploy.
 
 ## Development
 
