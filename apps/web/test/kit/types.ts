@@ -16,7 +16,8 @@ export type Role =
   | "heading"
   | "tab"
   | "option"
-  | "status";
+  | "status"
+  | "region";
 
 // Actionable: a control you can drive and assert on. Readonly: free text you can
 // only assert on. The split lets `find` return exactly the right capability.

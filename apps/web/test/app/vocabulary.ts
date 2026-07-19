@@ -141,6 +141,9 @@ export const selectors = {
     // A snippet/link the Receiver received, matched by the content that was sent.
     incomingText: (content: string) =>
       ({ text: content }) as const satisfies ReadonlySelector,
+    // The shared Transfer Log region — scope to it when a status (Delivered) also
+    // appears on a live row, so the assertion targets exactly one element.
+    log: { role: "region", name: "Transfer Log" } as const satisfies ActionableSelector,
   },
 };
 

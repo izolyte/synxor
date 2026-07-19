@@ -64,8 +64,10 @@ suite("Full transfer — happy path", () => {
 
       // Delivery is the moment the whole flow points at: once the download
       // completes, both sides settle on Delivered.
-      await receiver.find(selectors.transfer.delivered).shouldBeVisible();
-      await sender.find(selectors.transfer.delivered).shouldBeVisible();
+      // Both roles show Delivered on the live row and in the shared Transfer Log;
+      // scope to the Log so each side asserts exactly one.
+      await receiver.within(selectors.transfer.log).find(selectors.transfer.delivered).shouldBeVisible();
+      await sender.within(selectors.transfer.log).find(selectors.transfer.delivered).shouldBeVisible();
 
       // Text Snippet happy path: Sender pastes a snippet and sends it.
       await sender.find(selectors.transfer.compose).type(SNIPPET);
