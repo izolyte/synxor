@@ -144,6 +144,14 @@ jobs:
           # delivery) against the live stack, not just the render scenarios.
           E2E_STACK: "1"
         run: pnpm --filter web test:e2e
+      # TEMP (#83 verify): dump the aria snapshot of the failing page so we can see
+      # what the receiver actually rendered.
+      - name: Show Playwright error context
+        if: failure()
+        run: |
+          for f in apps/web/test-results/*/error-context.md; do
+            echo "===== $f ====="; cat "$f" 2>/dev/null || true
+          done
       - name: Dump stack logs on failure
         if: failure()
         run: docker compose logs --no-color
