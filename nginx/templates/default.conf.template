@@ -23,6 +23,11 @@ map $http_upgrade $connection_upgrade {
 # large burst. Tune down if abuse shows up; this guards the edge, not a quota.
 limit_req_zone $binary_remote_addr zone=upload_limit:10m rate=100r/s;
 
+# tRPC carries every query/mutation, including room creation and token issuance —
+# the endpoints most worth shielding from flooding/brute force. Tighter than the
+# upload zone since a normal client makes only a handful of these per action.
+limit_req_zone $binary_remote_addr zone=trpc_limit:10m rate=20r/s;
+
 upstream synxor_api {
     server api:3000;
 }
@@ -39,7 +44,10 @@ server {
     server_name _;
 
     location / {
-        return 301 https://$host$request_uri;
+        # Redirect to the configured canonical origin — never the request's own
+        # Host header, which on a catch-all server_name would be an open redirect.
+        # PUBLIC_ORIGIN carries scheme + host + any non-default port.
+        return 301 ${PUBLIC_ORIGIN}$request_uri;
     }
 }
 
@@ -77,8 +85,16 @@ server {
     location /socket.io/ {
         proxy_pass         http://synxor_api;
         proxy_http_version 1.1;
-        proxy_set_header   Upgrade    $http_upgrade;
-        proxy_set_header   Connection $connection_upgrade;
+        # nginx's proxy_set_header is non-additive: naming any header here drops
+        # every server-level one for this location, so the forwarding set has to
+        # be repeated alongside the WebSocket upgrade headers or the api sees
+        # nginx's internal IP as the client on every socket.
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Upgrade           $http_upgrade;
+        proxy_set_header   Connection        $connection_upgrade;
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
     }
@@ -86,17 +102,31 @@ server {
     # Chunked upload (POST /transfer/chunk) + streaming download. Buffering off so
     # nginx streams both directions instead of staging bodies to disk.
     location /transfer/ {
-        limit_req               zone=upload_limit burst=200 nodelay;
+        # No `nodelay`: a chunked upload's sustained rate can top the ceiling on a
+        # fast link, and the client treats any non-2xx as fatal — so smooth the
+        # burst by queuing (delaying) excess requests to the rate rather than
+        # rejecting them with a 429 that would abort the whole transfer.
+        limit_req               zone=upload_limit burst=200;
         limit_req_status        429;
+        # Uploads arrive as ~256 KiB chunks; cap the per-request body just above
+        # that so a spoofed multi-gigabyte POST is rejected at the edge (the
+        # server-level 5 GiB cap is a whole-file ceiling, useless here). Downloads
+        # are GET, so this doesn't touch them.
+        client_max_body_size    1m;
         proxy_pass              http://synxor_api;
         proxy_request_buffering off;
         proxy_buffering         off;
-        proxy_read_timeout      300s;
+        # Long streaming downloads can idle (backgrounded tab, client backpressure
+        # with buffering off) — match the socket's generous window so a slow pull
+        # isn't truncated mid-file at 5 minutes.
+        proxy_read_timeout      3600s;
     }
 
     # tRPC — every query/mutation the web client makes.
     location /trpc/ {
-        proxy_pass http://synxor_api;
+        limit_req        zone=trpc_limit burst=40 nodelay;
+        limit_req_status 429;
+        proxy_pass       http://synxor_api;
     }
 
     # Liveness endpoint on the api, reachable at the root origin.
