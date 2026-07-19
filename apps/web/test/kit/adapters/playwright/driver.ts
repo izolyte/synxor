@@ -28,7 +28,7 @@ function locatorFor(root: LocatorRoot, selector: Selector): Locator {
   if ("role" in selector) {
     return root.getByRole(
       selector.role as Parameters<LocatorRoot["getByRole"]>[0],
-      selector.name ? { name: selector.name } : undefined,
+      selector.name ? { name: selector.name, exact: selector.exact } : undefined,
     );
   }
   if ("label" in selector) return root.getByLabel(selector.label);

@@ -21,7 +21,10 @@ export type Role =
 // Actionable: a control you can drive and assert on. Readonly: free text you can
 // only assert on. The split lets `find` return exactly the right capability.
 export type ActionableSelector =
-  | { readonly role: Role; readonly name?: string }
+  // `exact` forces a whole-name match (Playwright's getByRole name is a substring
+  // match by default) — needed when one accessible name is a prefix of another,
+  // e.g. a plain "Download" alongside "Download <file>".
+  | { readonly role: Role; readonly name?: string; readonly exact?: boolean }
   | { readonly label: string }
   | { readonly testId: string };
 
