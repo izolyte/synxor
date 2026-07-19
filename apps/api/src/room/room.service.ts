@@ -8,8 +8,17 @@ import {
 } from '../domain/room/room.errors';
 import type { Room } from '../domain/room/room.entity';
 import { isExpired } from '../domain/room/room-status';
+import {
+  TRANSFER_REPOSITORY,
+  type TransferRepository,
+} from '../domain/transfer/transfer.repository';
+import {
+  DELIVERY_REPOSITORY,
+  type DeliveryRepository,
+} from '../domain/delivery/delivery.repository';
 import type { CreateRoomResult } from './dto/create-room.dto';
 import type { JoinRoomResult } from './dto/join-room.dto';
+import type { RoomTransfersResult } from './dto/room-transfers.dto';
 import { ROOM_CODE_MAX_ATTEMPTS } from '../domain/room/room-code';
 import { type Expiry, resolveExpiresAt } from '../domain/room/room-expiry';
 import { CODE_GENERATOR, type CodeGenerator } from '../domain/security/code-generator';
@@ -23,6 +32,8 @@ export class RoomService {
     @Inject(ROOM_REPOSITORY) private readonly rooms: RoomRepository,
     @Inject(CODE_GENERATOR) private readonly codeGen: CodeGenerator,
     @Inject(TOKEN_ISSUER) private readonly tokenIssuer: TokenIssuer,
+    @Inject(TRANSFER_REPOSITORY) private readonly transfers: TransferRepository,
+    @Inject(DELIVERY_REPOSITORY) private readonly deliveries: DeliveryRepository,
   ) {}
 
   async create(expiry: Expiry): Promise<CreateRoomResult> {
@@ -59,6 +70,42 @@ export class RoomService {
       room.expiresAt,
     );
     return { roomToken, roomId: room.id };
+  }
+
+  // The Transfer Log's persistent history: every Transfer recorded for the Room,
+  // oldest first. Only file uploads persist today (text/link Transfers are
+  // socket-only), so file metadata comes from the FilePayload and "delivered" is
+  // the existence of a Delivery row — there's no persisted status column. The
+  // live socket feed refines in-flight rows on top of this snapshot.
+  async listTransfers(roomCode: string): Promise<RoomTransfersResult> {
+    const room = await this.rooms.findByCode(roomCode);
+    if (!room) throw new RoomNotFoundError(roomCode);
+
+    const transfers = await this.transfers.findByRoomId(room.id);
+    const transferIds = transfers.map((t) => t.id);
+
+    // Two batched reads instead of a round-trip pair per Transfer — the Log grows
+    // with the Room, so N+1 here scales with session length.
+    const [filePayloads, deliveries] = await Promise.all([
+      this.transfers.findFilePayloadsByTransferIds(transferIds),
+      this.deliveries.findByTransferIds(transferIds),
+    ]);
+    const filePayloadByTransferId = new Map(filePayloads.map((fp) => [fp.transferId, fp]));
+    const deliveredTransferIds = new Set(deliveries.map((d) => d.transferId));
+
+    return transfers.map((transfer) => {
+      const filePayload = filePayloadByTransferId.get(transfer.id) ?? null;
+      return {
+        id: transfer.id,
+        payloadType: transfer.payloadType,
+        fileName: filePayload?.fileName ?? null,
+        // bigint → number for the transformer-less JSON wire; file sizes stay
+        // well under Number.MAX_SAFE_INTEGER (the upload cap is far below it).
+        fileSizeBytes: filePayload ? Number(filePayload.fileSizeBytes) : null,
+        delivered: deliveredTransferIds.has(transfer.id),
+        createdAt: transfer.createdAt.toISOString(),
+      };
+    });
   }
 
   // Lets the DB's unique constraint on Room.code arbitrate collisions, rather

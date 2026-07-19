@@ -1,6 +1,7 @@
 import { InMemoryUploadSessionStore } from './in-memory-upload-session.store';
 import { UploadSessionNotFoundError } from '../../domain/transfer/transfer.errors';
 import type { CreateUploadSessionInput } from '../../domain/transfer/upload-session';
+import { SECOND_MS } from '../../common/time';
 
 function input(overrides: Partial<CreateUploadSessionInput> = {}): CreateUploadSessionInput {
   return {
@@ -78,5 +79,26 @@ describe('InMemoryUploadSessionStore', () => {
     const before = await store.get('transfer-1');
     await store.markReceived('transfer-1', 0);
     expect(before?.receivedChunks.size).toBe(0);
+  });
+
+  describe('findAbandoned', () => {
+    it('returns sessions opened before the cutoff', async () => {
+      await seed({ transferId: 't1' });
+      const stale = await store.findAbandoned(new Date(Date.now() + SECOND_MS));
+      expect(stale.map((s) => s.transferId)).toEqual(['t1']);
+    });
+
+    it('excludes sessions opened at or after the cutoff', async () => {
+      await seed({ transferId: 't1' });
+      const stale = await store.findAbandoned(new Date(Date.now() - SECOND_MS));
+      expect(stale).toEqual([]);
+    });
+
+    it('returns snapshots detached from later mutations', async () => {
+      await seed({ transferId: 't1' });
+      const [stale] = await store.findAbandoned(new Date(Date.now() + SECOND_MS));
+      await store.markReceived('t1', 0);
+      expect(stale.receivedChunks.size).toBe(0);
+    });
   });
 });

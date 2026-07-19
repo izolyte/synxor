@@ -95,4 +95,21 @@ suite("TransferRow", () => {
 
     expect(onCopy).toHaveBeenCalledWith("the secret text");
   });
+
+  test("renders a timestamp column with a machine-readable time when given receivedAt", () => {
+    const at = Date.parse("2026-01-01T10:00:00.000Z");
+    renderComponent(
+      <ul>
+        <TransferRow transfer={transfer()} receivedAt={at} />
+      </ul>,
+    );
+
+    const time = document.querySelector("time");
+    expect(time).toHaveAttribute("dateTime", "2026-01-01T10:00:00.000Z");
+  });
+
+  test("omits the timestamp column when receivedAt is absent", () => {
+    renderComponent(row(transfer()));
+    expect(document.querySelector("time")).toBeNull();
+  });
 });

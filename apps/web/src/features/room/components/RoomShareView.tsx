@@ -10,9 +10,13 @@ import { DropZone } from "~/features/room/components/DropZone";
 import { TextPasteField } from "~/features/room/components/TextPasteField";
 import { IncomingTransfers } from "~/features/room/components/IncomingTransfers";
 import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
+import { TransferLog } from "~/features/room/components/TransferLog";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket, type SocketFactory } from "~/features/room/hooks/useRoomSocket";
+import { useTransferLogRows } from "~/features/room/hooks/useTransferLog";
+import { useClipboard } from "~/features/room/hooks/useClipboard";
 import type { RoomRole } from "~/features/room/services/room-session.service";
+import type { TransferHistory } from "~/features/room/utils/transfer-log";
 import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import { buildUrl } from "~/shared/utils/url";
 
@@ -33,12 +37,15 @@ export function RoomShareView({
   token,
   role = "sender",
   socketFactory,
+  transferHistory = [],
 }: {
   roomCode: string;
   expiresAt: string | undefined;
   token?: string;
   role?: RoomRole;
   socketFactory?: SocketFactory;
+  /** Persisted Transfer history for the Log, fetched by the route (RoomPage). */
+  transferHistory?: TransferHistory;
 }) {
   const countdown = useCountdown(expiresAt);
   const expired = countdown?.phase === "expired";
@@ -62,6 +69,16 @@ export function RoomShareView({
   useEffect(() => {
     if (expired && !transferActive) setSealed(true);
   }, [expired, transferActive]);
+
+  const clipboard = useClipboard();
+  const logRows = useTransferLogRows({
+    history: transferHistory,
+    transfers,
+    texts,
+    delivered,
+    token: socketToken,
+    apiOrigin,
+  });
 
   if (sealed || (expired && !transferActive)) {
     return (
@@ -131,6 +148,9 @@ export function RoomShareView({
           <DeliveryFlash delivered={delivered} transfers={transfers} />
         </>
       )}
+
+      {/* Shared history + live feed, for both roles. */}
+      <TransferLog rows={logRows} onCopy={clipboard.copy} />
     </>
   );
 }

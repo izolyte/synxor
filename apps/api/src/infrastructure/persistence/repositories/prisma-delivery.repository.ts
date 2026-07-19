@@ -27,6 +27,14 @@ export class PrismaDeliveryRepository implements DeliveryRepository {
     return d ? this.toEntity(d) : null;
   }
 
+  async findByTransferIds(transferIds: string[]): Promise<Delivery[]> {
+    if (transferIds.length === 0) return [];
+    const ds = await this.prisma.delivery.findMany({
+      where: { transferId: { in: transferIds } },
+    });
+    return ds.map((d) => this.toEntity(d));
+  }
+
   private toEntity(d: PrismaDelivery): Delivery {
     return {
       id: d.id,

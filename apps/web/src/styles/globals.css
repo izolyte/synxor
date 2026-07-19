@@ -426,6 +426,29 @@
   .dark ::selection {
     background-color: oklch(0.68 0.1 200 / 0.35);
   }
+
+  /* Keyboard focus ring for elements that aren't a native control with its own
+     ring — currently the Drop Zone (docs/design/09-focus-keyboard.md). A
+     transparent outline reserves the space so nothing shifts when it colors in
+     on :focus-visible; pointer clicks stay ring-free. */
+  .focus-ring {
+    outline: var(--focus-ring-width) solid transparent;
+    outline-offset: var(--focus-ring-offset);
+    border-radius: var(--focus-ring-radius);
+    transition: outline-color var(--duration-fast) ease;
+  }
+
+  .focus-ring:focus-visible {
+    outline-color: var(--focus-ring-color);
+  }
+
+  /* Theme swap adds this for a single frame (docs/design/12-dark-mode.md): colors
+     cut over at once instead of every element crossfading its background, which
+     otherwise reads as a flash. */
+  .no-transitions,
+  .no-transitions * {
+    transition: none !important;
+  }
 }
 
 /* ── Keyframes ── */

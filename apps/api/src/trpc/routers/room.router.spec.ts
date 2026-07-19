@@ -11,6 +11,7 @@ function setup() {
       expiresAt: '2099-01-01T00:00:00.000Z',
     }),
     join: jest.fn().mockResolvedValue({ roomToken: 'tok', roomId: 'room-1' }),
+    listTransfers: jest.fn().mockResolvedValue([]),
   };
   const roomRouter = new RoomRouter(roomService as unknown as RoomService);
   const caller = t.createCallerFactory(roomRouter.router)({});
@@ -58,5 +59,37 @@ describe('RoomRouter', () => {
     const { roomService, caller } = setup();
     roomService.join.mockRejectedValueOnce(new RoomExpiredError('AB3X7Z'));
     await expect(caller.join({ roomCode: 'AB3X7Z' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('delegates transfers to RoomService and returns its result', async () => {
+    const { roomService, caller } = setup();
+    const history = [
+      {
+        id: 't1',
+        payloadType: 'FILE' as const,
+        fileName: 'video.mp4',
+        fileSizeBytes: 2048,
+        delivered: true,
+        createdAt: '2099-01-01T00:00:00.000Z',
+      },
+    ];
+    roomService.listTransfers.mockResolvedValueOnce(history);
+    const result = await caller.transfers({ roomCode: 'AB3X7Z' });
+    expect(roomService.listTransfers).toHaveBeenCalledWith('AB3X7Z');
+    expect(result).toEqual(history);
+  });
+
+  it('rejects a malformed Room Code before reaching the transfers service', async () => {
+    const { roomService, caller } = setup();
+    await expect(caller.transfers({ roomCode: 'nope' })).rejects.toThrow();
+    expect(roomService.listTransfers).not.toHaveBeenCalled();
+  });
+
+  it('maps a missing Room to a NOT_FOUND tRPC error on transfers', async () => {
+    const { roomService, caller } = setup();
+    roomService.listTransfers.mockRejectedValueOnce(new RoomNotFoundError('AB3X7Z'));
+    await expect(caller.transfers({ roomCode: 'AB3X7Z' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 });

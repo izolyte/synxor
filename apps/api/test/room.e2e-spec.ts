@@ -11,6 +11,10 @@ import { PrismaService } from './../src/infrastructure/persistence/prisma/prisma
 import { JWT_SECRET_ENV } from './../src/infrastructure/security/security.constants';
 import { ROOM_REPOSITORY } from './../src/domain/room/room.repository';
 import { InMemoryRoomRepository } from './../src/domain/room/room.repository.fake';
+import { TRANSFER_REPOSITORY } from './../src/domain/transfer/transfer.repository';
+import { FakeTransferRepository } from './../src/domain/transfer/transfer.repository.fake';
+import { DELIVERY_REPOSITORY } from './../src/domain/delivery/delivery.repository';
+import { FakeDeliveryRepository } from './../src/domain/delivery/delivery.repository.fake';
 import { ROOM_CODE_PATTERN } from './../src/domain/room/room-code';
 
 // Fakes the persistence seam (InMemoryRoomRepository + stubbed PrismaService) so
@@ -20,12 +24,16 @@ import { ROOM_CODE_PATTERN } from './../src/domain/room/room-code';
 describe('Room API (e2e)', () => {
   let app: INestApplication<App>;
   let rooms: InMemoryRoomRepository;
+  let transfers: FakeTransferRepository;
+  let deliveries: FakeDeliveryRepository;
   let priorJwtSecret: string | undefined;
 
   beforeAll(async () => {
     priorJwtSecret = process.env[JWT_SECRET_ENV];
     process.env[JWT_SECRET_ENV] = 'test-secret-at-least-32-characters-long';
     rooms = new InMemoryRoomRepository();
+    transfers = new FakeTransferRepository();
+    deliveries = new FakeDeliveryRepository();
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), TrpcModule],
@@ -34,6 +42,10 @@ describe('Room API (e2e)', () => {
       .useValue({})
       .overrideProvider(ROOM_REPOSITORY)
       .useValue(rooms)
+      .overrideProvider(TRANSFER_REPOSITORY)
+      .useValue(transfers)
+      .overrideProvider(DELIVERY_REPOSITORY)
+      .useValue(deliveries)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -140,6 +152,100 @@ describe('Room API (e2e)', () => {
       expect(trpcErrorMessage.parse(res.body).error.message).toBe(
         'Room is no longer available: EXPIR1',
       );
+    });
+  });
+
+  describe('room.transfers', () => {
+    const historyResult = trpcResult(
+      z.array(
+        z.object({
+          id: z.string(),
+          payloadType: z.enum(['FILE', 'TEXT_SNIPPET', 'LINK']),
+          fileName: z.string().nullable(),
+          fileSizeBytes: z.number().nullable(),
+          delivered: z.boolean(),
+          createdAt: z.string(),
+        }),
+      ),
+    );
+
+    // A query rides GET with the input JSON-encoded in the query string — no tRPC
+    // transformer, so the bigint file size must already be a plain number on the
+    // wire (a raw bigint would throw on serialize).
+    function get(roomCode: string) {
+      return request(app.getHttpServer())
+        .get(`${TRPC_PATH}/room.transfers`)
+        .query({ input: JSON.stringify({ roomCode }) });
+    }
+
+    it('returns a file Transfer with delivery status as plain JSON', async () => {
+      rooms.stored.set('LOGE2E', {
+        id: 'room-log',
+        code: 'LOGE2E',
+        status: 'ACTIVE',
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+      });
+      const transfer = await transfers.create({
+        roomId: 'room-log',
+        payloadType: 'FILE',
+        contentLength: BigInt(4096),
+      });
+      await transfers.createFilePayload({
+        transferId: transfer.id,
+        fileName: 'clip.mp4',
+        fileSizeBytes: BigInt(4096),
+        mimeType: 'video/mp4',
+        storageKey: 'k1',
+      });
+      await deliveries.create({ transferId: transfer.id, deliveredAt: new Date() });
+
+      const res = await get('LOGE2E').expect(200);
+      const items = historyResult.parse(res.body).result.data;
+      expect(items).toEqual([
+        {
+          id: transfer.id,
+          payloadType: 'FILE',
+          fileName: 'clip.mp4',
+          fileSizeBytes: 4096,
+          delivered: true,
+          createdAt: transfer.createdAt.toISOString(),
+        },
+      ]);
+    });
+
+    it('reports delivered:false for a Transfer with no Delivery row yet', async () => {
+      rooms.stored.set('LOGE3E', {
+        id: 'room-log-2',
+        code: 'LOGE3E',
+        status: 'ACTIVE',
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+      });
+      const transfer = await transfers.create({
+        roomId: 'room-log-2',
+        payloadType: 'FILE',
+        contentLength: BigInt(1024),
+      });
+      await transfers.createFilePayload({
+        transferId: transfer.id,
+        fileName: 'draft.txt',
+        fileSizeBytes: BigInt(1024),
+        mimeType: 'text/plain',
+        storageKey: 'k2',
+      });
+
+      const res = await get('LOGE3E').expect(200);
+      const [item] = historyResult.parse(res.body).result.data;
+      expect(item.delivered).toBe(false);
+    });
+
+    it('maps a well-formed but unknown Room Code to NOT_FOUND', async () => {
+      await get('ZZZZZZ').expect(404);
+    });
+
+    it('rejects a malformed Room Code with 400', async () => {
+      await get('nope').expect(400);
     });
   });
 });

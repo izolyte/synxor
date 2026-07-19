@@ -8,6 +8,8 @@ import {
 } from '../domain/room/room.errors';
 import { ROOM_CODE_MAX_ATTEMPTS, ROOM_CODE_PATTERN } from '../domain/room/room-code';
 import { InMemoryRoomRepository } from '../domain/room/room.repository.fake';
+import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
+import { FakeDeliveryRepository } from '../domain/delivery/delivery.repository.fake';
 import type { Room, RoomStatus } from '../domain/room/room.entity';
 import type { CodeGenerator } from '../domain/security/code-generator';
 import { TokenRole, type TokenClaims, type TokenIssuer } from '../domain/security/token-issuer';
@@ -53,8 +55,10 @@ function setup(codes: string[], overrides: { existingCodes?: string[] } = {}) {
   }
   const codeGen = new FakeCodeGenerator(...codes);
   const tokenIssuer = new FakeTokenIssuer();
-  const service = new RoomService(repo, codeGen, tokenIssuer);
-  return { service, repo, codeGen, tokenIssuer };
+  const transfers = new FakeTransferRepository();
+  const deliveries = new FakeDeliveryRepository();
+  const service = new RoomService(repo, codeGen, tokenIssuer, transfers, deliveries);
+  return { service, repo, codeGen, tokenIssuer, transfers, deliveries };
 }
 
 describe('RoomService.create', () => {
@@ -217,5 +221,72 @@ describe('RoomService.join', () => {
 
     await expect(service.join('GONE02')).rejects.toThrow(RoomExpiredError);
     expect(tokenIssuer.calls).toHaveLength(0);
+  });
+});
+
+describe('RoomService.transfers', () => {
+  it('throws RoomNotFoundError for an unknown Room Code', async () => {
+    const { service } = setup([]);
+    await expect(service.listTransfers('NOPE01')).rejects.toThrow(RoomNotFoundError);
+  });
+
+  it('returns an empty history for a Room with no Transfers', async () => {
+    const { service, repo } = setup([]);
+    seedRoom(repo, { code: 'EMPTY1' });
+    await expect(service.listTransfers('EMPTY1')).resolves.toEqual([]);
+  });
+
+  it('maps a file Transfer with its payload metadata, narrowing bigint to number', async () => {
+    const { service, repo, transfers } = setup([]);
+    const room = seedRoom(repo, { code: 'LOG001' });
+    const transfer = await transfers.create({
+      roomId: room.id,
+      payloadType: 'FILE',
+      contentLength: BigInt(2048),
+    });
+    await transfers.createFilePayload({
+      transferId: transfer.id,
+      fileName: 'video.mp4',
+      fileSizeBytes: BigInt(2048),
+      mimeType: 'video/mp4',
+      storageKey: 'key-1',
+    });
+
+    const [item] = await service.listTransfers('LOG001');
+    expect(item).toEqual({
+      id: transfer.id,
+      payloadType: 'FILE',
+      fileName: 'video.mp4',
+      fileSizeBytes: 2048,
+      delivered: false,
+      createdAt: transfer.createdAt.toISOString(),
+    });
+    expect(typeof item.fileSizeBytes).toBe('number');
+  });
+
+  it('marks a Transfer delivered once a Delivery row exists', async () => {
+    const { service, repo, transfers, deliveries } = setup([]);
+    const room = seedRoom(repo, { code: 'LOG002' });
+    const transfer = await transfers.create({
+      roomId: room.id,
+      payloadType: 'FILE',
+      contentLength: BigInt(10),
+    });
+    await deliveries.create({ transferId: transfer.id, deliveredAt: new Date() });
+
+    const [item] = await service.listTransfers('LOG002');
+    expect(item.delivered).toBe(true);
+  });
+
+  it('only returns Transfers for the requested Room', async () => {
+    const { service, repo, transfers } = setup([]);
+    const mine = seedRoom(repo, { code: 'MINE01' });
+    const other = seedRoom(repo, { code: 'OTHR01' });
+    await transfers.create({ roomId: mine.id, payloadType: 'FILE', contentLength: BigInt(1) });
+    await transfers.create({ roomId: other.id, payloadType: 'FILE', contentLength: BigInt(1) });
+
+    const items = await service.listTransfers('MINE01');
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBeDefined();
   });
 });
