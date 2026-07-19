@@ -1,6 +1,8 @@
 import { InMemoryRoomRepository } from '../domain/room/room.repository.fake';
 import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
+import { FakeDeliveryRepository } from '../domain/delivery/delivery.repository.fake';
 import { FakeObjectStorage } from '../domain/storage/object-storage.fake';
+import { RoomService } from '../room/room.service';
 import type { UploadSession, UploadSessionStore } from '../domain/transfer/upload-session';
 import { chunkObjectKey, fileObjectKey } from '../domain/transfer/storage-key';
 import { HOUR_MS } from '../common/time';
@@ -48,7 +50,17 @@ describe('ExpirySweeperService', () => {
     transfers = new FakeTransferRepository();
     storage = new FakeObjectStorage();
     sessions = new StubUploadSessionStore();
-    sweeper = new ExpirySweeperService(rooms, transfers, storage, sessions);
+    // The sweeper delegates Room purging to RoomService — wire a real one over the
+    // same fakes so expiry exercises the exact path on-demand close uses.
+    const roomService = new RoomService(
+      rooms,
+      { generate: () => 'UNUSED' },
+      { sign: () => 'unused' },
+      transfers,
+      new FakeDeliveryRepository(),
+      storage,
+    );
+    sweeper = new ExpirySweeperService(rooms, transfers, storage, sessions, roomService);
   });
 
   // Seeds an ACTIVE room holding one file transfer whose object sits in storage.

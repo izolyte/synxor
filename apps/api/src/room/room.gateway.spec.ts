@@ -6,12 +6,26 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { io, type Socket } from 'socket.io-client';
 import { RoomGateway } from './room.gateway';
 import { RoomPresenceService } from './room-presence.service';
+import { RoomService } from './room.service';
 import { PARTICIPANT_REPOSITORY } from '../domain/participant/participant.repository';
 import { TOKEN_VERIFIER } from '../domain/security/token-verifier';
 import { TokenRole, type TokenClaims } from '../domain/security/token-issuer';
 import { InMemoryParticipantRepository } from '../domain/participant/participant.repository.fake';
 import { TRANSFER_REPOSITORY } from '../domain/transfer/transfer.repository';
 import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
+
+// Stands in for RoomService in the gateway: records the Rooms asked to close so
+// the close handler's wiring can be asserted without a DB or storage.
+class FakeRoomService {
+  readonly closed: string[] = [];
+  shouldThrow = false;
+
+  close(roomId: string): Promise<void> {
+    if (this.shouldThrow) return Promise.reject(new Error('close failed'));
+    this.closed.push(roomId);
+    return Promise.resolve();
+  }
+}
 
 // Controls what claims are returned per token string — no real JWT needed.
 class FakeTokenVerifier {
@@ -49,6 +63,7 @@ async function startApp(
   fakeVerifier: FakeTokenVerifier,
   fakeParticipants: InMemoryParticipantRepository,
   fakeTransfers: FakeTransferRepository,
+  fakeRoomService: FakeRoomService = new FakeRoomService(),
 ): Promise<{ app: INestApplication; port: number }> {
   const module = await Test.createTestingModule({
     providers: [
@@ -57,6 +72,7 @@ async function startApp(
       { provide: TOKEN_VERIFIER, useValue: fakeVerifier },
       { provide: PARTICIPANT_REPOSITORY, useValue: fakeParticipants },
       { provide: TRANSFER_REPOSITORY, useValue: fakeTransfers },
+      { provide: RoomService, useValue: fakeRoomService },
     ],
   }).compile();
 
@@ -73,13 +89,20 @@ describe('RoomGateway', () => {
   let fakeVerifier: FakeTokenVerifier;
   let fakeParticipants: InMemoryParticipantRepository;
   let fakeTransfers: FakeTransferRepository;
+  let fakeRoomService: FakeRoomService;
   const sockets: Socket[] = [];
 
   beforeEach(async () => {
     fakeVerifier = new FakeTokenVerifier();
     fakeParticipants = new InMemoryParticipantRepository();
     fakeTransfers = new FakeTransferRepository();
-    ({ app, port } = await startApp(fakeVerifier, fakeParticipants, fakeTransfers));
+    fakeRoomService = new FakeRoomService();
+    ({ app, port } = await startApp(
+      fakeVerifier,
+      fakeParticipants,
+      fakeTransfers,
+      fakeRoomService,
+    ));
   });
 
   afterEach(async () => {
@@ -453,5 +476,56 @@ describe('RoomGateway', () => {
 
     const ack = (await sendText(sender, 'a'.repeat(100_001))) as { error: string };
     expect(ack.error).toMatch(/character limit/);
+  });
+
+  // ── Close Room ───────────────────────────────────────────────────────────────
+
+  function closeRoom(socket: Socket): Promise<unknown> {
+    return new Promise((resolve) => socket.emit('room:close', resolve));
+  }
+
+  it('lets the Sender close the Room: purges it, notifies, and kicks everyone', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    const closed = waitFor(receiver, 'room:closed');
+    const gone = waitForDisconnect(receiver);
+    const ack = (await closeRoom(sender)) as { ok: boolean };
+
+    expect(ack).toEqual({ ok: true });
+    expect(fakeRoomService.closed).toEqual(['room-1']);
+    await closed; // Receiver was told before being cut off
+    await gone; // …then disconnected
+  });
+
+  it('rejects a Receiver trying to close the Room and purges nothing', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    const ack = (await closeRoom(receiver)) as { error: string };
+    expect(ack.error).toBe('Only the Sender may close the Room');
+    expect(fakeRoomService.closed).toEqual([]);
+  });
+
+  it('reports an error and keeps the Room when the purge fails', async () => {
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    fakeRoomService.shouldThrow = true;
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+
+    const ack = (await closeRoom(sender)) as { error: string };
+    expect(ack.error).toMatch(/Could not close/);
   });
 });

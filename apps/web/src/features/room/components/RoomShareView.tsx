@@ -11,6 +11,7 @@ import { TextPasteField } from "~/features/room/components/TextPasteField";
 import { IncomingTransfers } from "~/features/room/components/IncomingTransfers";
 import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
 import { TransferLog } from "~/features/room/components/TransferLog";
+import { DeleteRoomControl } from "~/features/room/components/DeleteRoomControl";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket, type SocketFactory } from "~/features/room/hooks/useRoomSocket";
 import type { Uploader } from "~/features/room/hooks/useFileUploads";
@@ -60,10 +61,8 @@ export function RoomShareView({
   // empties `transfers` — can't un-seal the Room and flip it back open.
   const [sealed, setSealed] = useState(false);
   const socketToken = sealed ? undefined : token;
-  const { status, receiverCount, transfers, texts, delivered, sendText } = useRoomSocket(
-    socketToken,
-    socketFactory,
-  );
+  const { status, receiverCount, transfers, texts, delivered, closed, sendText, closeRoom } =
+    useRoomSocket(socketToken, socketFactory);
   // Same origin the socket rides; only resolved with a live token (client-only).
   const apiOrigin = socketToken ? resolveApiOrigin(import.meta.env) : undefined;
 
@@ -86,6 +85,17 @@ export function RoomShareView({
     token: socketToken,
     apiOrigin,
   });
+
+  // The Sender closed the Room out from under everyone still in it — terminal,
+  // and it wins over the expiry/sealed states below.
+  if (closed) {
+    return (
+      <RoomNotice
+        title="Room closed"
+        message="The Sender closed this Room. Create a new Room to send files."
+      />
+    );
+  }
 
   if (sealed || (expired && !transferActive)) {
     return (
@@ -164,6 +174,9 @@ export function RoomShareView({
 
       {/* Shared history + live feed, for both roles. */}
       <TransferLog rows={logRows} onCopy={clipboard.copy} />
+
+      {/* Sender-only teardown, parked at the edge away from the send flow. */}
+      {role === "sender" && <DeleteRoomControl onClose={closeRoom} />}
     </>
   );
 }

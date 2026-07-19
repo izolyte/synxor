@@ -38,6 +38,7 @@ export const copy = {
     heading: {
       ready: "Room ready",
       expired: "Room expired",
+      closed: "Room closed",
       unavailable: "Room unavailable",
     },
     copyCode: "Copy code",
@@ -47,6 +48,13 @@ export const copy = {
     waiting: "Waiting for Receiver",
     connected: "Receiver connected",
     createNew: "Create a new Room",
+    // Sender's teardown control and its two-step confirm.
+    deleteRoom: "Delete Room",
+    confirmDelete: "Yes, delete",
+    cancelDelete: "Keep Room",
+    deleteError: "Couldn't close the Room — try again.",
+    // What a kicked Participant (or the Sender mid-redirect) sees.
+    closedMessage: "The Sender closed this Room. Create a new Room to send files.",
   },
   // The live transfer surface, split by side: what the Sender does (send a file,
   // paste text) and what the Receiver does (download, copy). Delivery is the shared
@@ -116,6 +124,16 @@ export const selectors = {
       role: "link",
       name: copy.room.createNew,
     } as const satisfies ActionableSelector,
+    deleteRoom: { role: "button", name: copy.room.deleteRoom } as const satisfies ActionableSelector,
+    confirmDelete: {
+      role: "button",
+      name: copy.room.confirmDelete,
+    } as const satisfies ActionableSelector,
+    cancelDelete: {
+      role: "button",
+      name: copy.room.cancelDelete,
+    } as const satisfies ActionableSelector,
+    deleteError: { text: copy.room.deleteError } as const satisfies ReadonlySelector,
   },
   transfer: {
     dropZoneInput: { testId: copy.transfer.dropZoneInput } as const satisfies ActionableSelector,
