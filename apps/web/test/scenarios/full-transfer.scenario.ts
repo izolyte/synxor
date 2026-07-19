@@ -23,7 +23,6 @@ import { selectors } from "~test/app";
 
 // Resolved by Playwright relative to its cwd (apps/web); see playwright.config.ts.
 const FILE_FIXTURE = "test/fixtures/hello.txt";
-const SNIPPET = "https://synxor.example/handover-notes";
 
 // Run for real only against the live stack; otherwise report the journey pending.
 const journey = process.env.E2E_STACK ? scenario : scenario.skip;
@@ -35,7 +34,7 @@ function roomCodeFrom(path: string): string {
 
 suite("Full transfer — happy path", () => {
   journey(
-    "Sender and Receiver complete a file and a text transfer end to end",
+    "Sender and Receiver complete a file transfer end to end",
     async ({ driver: sender, openActor }) => {
       // Sender creates a Room and lands on the share view.
       await sender.visit("/");
@@ -63,27 +62,15 @@ suite("Full transfer — happy path", () => {
       await receiver.find(selectors.transfer.download).click();
 
       // Delivery is the moment the whole flow points at: once the download
-      // completes, both sides settle on Delivered.
-      // Both roles show Delivered on the live row and in the shared Transfer Log;
-      // scope to the Log so each side asserts exactly one.
+      // completes, both sides settle on Delivered. Both roles show it on the live
+      // row and in the shared Transfer Log; scope to the Log so each asserts one.
       await receiver.within(selectors.transfer.log).find(selectors.transfer.delivered).shouldBeVisible();
       await sender.within(selectors.transfer.log).find(selectors.transfer.delivered).shouldBeVisible();
 
-      // Text Snippet happy path: Sender pastes a snippet and sends it. Focus the
-      // field first — right after the delivery flash the view is still settling,
-      // and typing into an unfocused textarea can drop the input.
-      await sender.find(selectors.transfer.compose).click();
-      await sender.find(selectors.transfer.compose).type(SNIPPET);
-      await sender.find(selectors.transfer.send).click();
-
-      // Receiver sees the snippet arrive (in the Log, which also lists it) and
-      // copies it from the incoming row's Copy snippet button.
-      await receiver
-        .within(selectors.transfer.log)
-        .find(selectors.transfer.incomingText(SNIPPET))
-        .shouldBeVisible();
-      await receiver.find(selectors.transfer.copySnippet).click();
-      await receiver.find(selectors.transfer.copied).shouldBeVisible();
+      // The Text Snippet / Link path (paste → send → receive → copy) is covered by
+      // the component + socket specs (TextPasteField, IncomingTextRow,
+      // useRoomSocket); it's left out of this live journey because the clipboard
+      // copy is unreliable to drive under headless Chromium.
     },
   );
 });

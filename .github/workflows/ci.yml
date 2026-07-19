@@ -144,8 +144,9 @@ jobs:
           # delivery) against the live stack, not just the render scenarios.
           E2E_STACK: "1"
         run: pnpm --filter web test:e2e
-      # TEMP (#83 verify): dump the aria snapshot of the failing page so we can see
-      # what the receiver actually rendered.
+      # On failure, dump each Playwright error-context (the aria snapshot of the
+      # page when the assertion failed) into the log — the fastest way to see what
+      # actually rendered without pulling the trace artifact.
       - name: Show Playwright error context
         if: failure()
         run: |
