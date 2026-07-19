@@ -398,7 +398,10 @@ describe('RoomGateway', () => {
     const sender = open('sender-tok');
     await waitFor(sender, 'connect');
     const receiver = open('receiver-tok');
-    await waitFor(sender, 'room:joined');
+    // Wait for the Receiver itself to be in the Room, not just the Sender's
+    // room:joined — otherwise "nothing was broadcast" could pass simply because
+    // the Receiver hadn't joined yet.
+    await waitFor(receiver, 'room:joined');
 
     const gotText = waitFor(receiver, 'transfer:text');
     const ack = (await sendText(sender, 'https://example.com')) as { error: string };
