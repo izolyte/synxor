@@ -3,9 +3,13 @@ import "../styles/globals.css";
 import { Button } from "~/shared/ui/button";
 import { Wordmark } from "~/shared/components/Wordmark";
 import { CenteredScreen } from "~/shared/components/CenteredScreen";
+import { ThemeToggle } from "~/shared/components/ThemeToggle";
 import type { RouterAppContext } from "~/shared/services/trpc";
 
-const themeScript = `(function(){var d=document.documentElement,s=null;try{s=localStorage.getItem("theme")}catch(_){}(s==="dark"||(!s&&matchMedia("(prefers-color-scheme:dark)").matches))&&(d.classList.add("dark"),d.setAttribute("data-theme","dark"))})()`;
+// Runs before first paint so a returning dark-mode user never sees a light flash.
+// Stored choice wins; otherwise follow the OS. `.dark` is the single source of
+// truth (docs/design/12-dark-mode.md) — the runtime toggle keys off the same class.
+const themeScript = `(function(){var d=document.documentElement,s=null;try{s=localStorage.getItem("theme")}catch(_){}(s==="dark"||(!s&&matchMedia("(prefers-color-scheme:dark)").matches))&&d.classList.add("dark")})()`;
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
@@ -37,6 +41,18 @@ function RootComponent() {
       </head>
       <body>
         <Outlet />
+        {/* Global control, so it lives outside the route Outlet. Fixed to the
+            top-right corner past the safe-area inset; placed after the Outlet so
+            it falls last in the tab order per docs/design/09-focus-keyboard.md. */}
+        <div
+          className="fixed top-0 right-0 z-[var(--z-sticky)] p-[var(--space-3)]"
+          style={{
+            paddingTop: "calc(var(--space-3) + env(safe-area-inset-top))",
+            paddingRight: "calc(var(--space-3) + env(safe-area-inset-right))",
+          }}
+        >
+          <ThemeToggle />
+        </div>
         <Scripts />
       </body>
     </html>
