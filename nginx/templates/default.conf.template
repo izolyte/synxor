@@ -1,0 +1,141 @@
+# Synxor edge reverse proxy — TLS termination, rate limiting, body-size cap.
+#
+# This file is rendered by the nginx image's envsubst step (see
+# 20-envsubst-on-templates in the official entrypoint): every *.template under
+# /etc/nginx/templates lands in /etc/nginx/conf.d/ with the ${VAR} placeholders
+# below expanded from the container environment. The result is included inside
+# the stock nginx.conf http{} block, so http-context directives (map,
+# limit_req_zone, upstream) are valid here.
+#
+# NGINX_ENVSUBST_FILTER (set in compose) restricts substitution to our own vars,
+# so nginx runtime variables like $host and $remote_addr pass through untouched.
+
+# Socket.io rides a WebSocket upgrade: echo Connection: upgrade on the handshake,
+# Connection: close otherwise. Keyed off the client's Upgrade header.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# Per-client rate limit for the chunked-upload endpoint. Uploads fan out into
+# many small POSTs (256 KiB per chunk), so a legit fast transfer can push dozens
+# of requests a second — the ceiling is generous on purpose and paired with a
+# large burst. Tune down if abuse shows up; this guards the edge, not a quota.
+limit_req_zone $binary_remote_addr zone=upload_limit:10m rate=100r/s;
+
+# tRPC carries every query/mutation, including room creation and token issuance —
+# the endpoints most worth shielding from flooding/brute force. Tighter than the
+# upload zone since a normal client makes only a handful of these per action.
+limit_req_zone $binary_remote_addr zone=trpc_limit:10m rate=20r/s;
+
+upstream synxor_api {
+    server api:3000;
+}
+
+upstream synxor_web {
+    server web:3000;
+}
+
+# Plain HTTP — bounce everything to HTTPS. (A production ACME http-01 challenge
+# would be served from here, before the redirect, when issuing real certs.)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    location / {
+        # Redirect to the configured canonical origin — never the request's own
+        # Host header, which on a catch-all server_name would be an open redirect.
+        # PUBLIC_ORIGIN carries scheme + host + any non-default port.
+        return 301 ${PUBLIC_ORIGIN}$request_uri;
+    }
+}
+
+# HTTPS — TLS terminates here; plaintext continues over the internal network.
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name _;
+
+    # Self-signed for local dev; TLS_CERT_PATH/TLS_KEY_PATH point at real,
+    # operator-managed certs in production. Issuance and renewal are an operator
+    # step, not part of this config.
+    ssl_certificate     ${TLS_CERT_PATH};
+    ssl_certificate_key ${TLS_KEY_PATH};
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # Reject oversized bodies at the edge before they reach NestJS. Sourced from
+    # MAX_FILE_SIZE_BYTES (bytes; default 5 GiB) — the whole-file ceiling, well
+    # above the 256 KiB per-chunk request the upload endpoint actually sends.
+    client_max_body_size ${MAX_FILE_SIZE_BYTES};
+
+    # HSTS is a production concern — left off for local dev so a self-signed
+    # localhost doesn't pin every other http://localhost project to HTTPS.
+    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Realtime signaling. Long idle timeout so quiet Rooms don't drop their socket.
+    location /socket.io/ {
+        proxy_pass         http://synxor_api;
+        proxy_http_version 1.1;
+        # nginx's proxy_set_header is non-additive: naming any header here drops
+        # every server-level one for this location, so the forwarding set has to
+        # be repeated alongside the WebSocket upgrade headers or the api sees
+        # nginx's internal IP as the client on every socket.
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Upgrade           $http_upgrade;
+        proxy_set_header   Connection        $connection_upgrade;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # Chunked upload (POST /transfer/chunk) + streaming download. Buffering off so
+    # nginx streams both directions instead of staging bodies to disk.
+    location /transfer/ {
+        # No `nodelay`: a chunked upload's sustained rate can top the ceiling on a
+        # fast link, and the client treats any non-2xx as fatal — so smooth the
+        # burst by queuing (delaying) excess requests to the rate rather than
+        # rejecting them with a 429 that would abort the whole transfer.
+        limit_req               zone=upload_limit burst=200;
+        limit_req_status        429;
+        # Uploads arrive as ~256 KiB chunks; cap the per-request body just above
+        # that so a spoofed multi-gigabyte POST is rejected at the edge (the
+        # server-level 5 GiB cap is a whole-file ceiling, useless here). Downloads
+        # are GET, so this doesn't touch them.
+        client_max_body_size    1m;
+        proxy_pass              http://synxor_api;
+        proxy_request_buffering off;
+        proxy_buffering         off;
+        # Long streaming downloads can idle (backgrounded tab, client backpressure
+        # with buffering off) — match the socket's generous window so a slow pull
+        # isn't truncated mid-file at 5 minutes.
+        proxy_read_timeout      3600s;
+    }
+
+    # tRPC — every query/mutation the web client makes.
+    location /trpc/ {
+        limit_req        zone=trpc_limit burst=40 nodelay;
+        limit_req_status 429;
+        proxy_pass       http://synxor_api;
+    }
+
+    # Liveness endpoint on the api, reachable at the root origin.
+    location = /health {
+        proxy_pass http://synxor_api;
+    }
+
+    # Everything else is the web SSR app (/, /join, /room/*, hashed assets).
+    location / {
+        proxy_pass http://synxor_web;
+    }
+}
