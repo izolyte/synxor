@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { RoomService } from './room.service';
 import type { Expiry } from '../domain/room/room-expiry';
 import {
+  RoomClosedError,
   RoomCodeExhaustionError,
   RoomExpiredError,
   RoomNotFoundError,
@@ -11,7 +12,7 @@ import { InMemoryRoomRepository } from '../domain/room/room.repository.fake';
 import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
 import { FakeDeliveryRepository } from '../domain/delivery/delivery.repository.fake';
 import { FakeObjectStorage } from '../domain/storage/object-storage.fake';
-import type { Room, RoomStatus } from '../domain/room/room.entity';
+import type { Room } from '../domain/room/room.entity';
 import type { CodeGenerator } from '../domain/security/code-generator';
 import { TokenRole, type TokenClaims, type TokenIssuer } from '../domain/security/token-issuer';
 import { DAY_MS, HOUR_MS } from '../common/time';
@@ -208,14 +209,21 @@ describe('RoomService.join', () => {
     await expect(service.join('GONE01')).rejects.toThrow(RoomExpiredError);
   });
 
-  it.each<RoomStatus>(['EXPIRED', 'CLOSED'])(
-    'throws RoomExpiredError when the Room status is %s',
-    async (status) => {
-      const { service, repo } = setup([]);
-      seedRoom(repo, { code: 'SHUT01', status, expiresAt: new Date(Date.now() + HOUR_MS) });
-      await expect(service.join('SHUT01')).rejects.toThrow(RoomExpiredError);
-    },
-  );
+  it('throws RoomExpiredError when the Room status is EXPIRED', async () => {
+    const { service, repo } = setup([]);
+    seedRoom(repo, {
+      code: 'SHUT01',
+      status: 'EXPIRED',
+      expiresAt: new Date(Date.now() + HOUR_MS),
+    });
+    await expect(service.join('SHUT01')).rejects.toThrow(RoomExpiredError);
+  });
+
+  it('throws RoomClosedError when the Room was deliberately closed', async () => {
+    const { service, repo } = setup([]);
+    seedRoom(repo, { code: 'SHUT02', status: 'CLOSED', expiresAt: new Date(Date.now() + HOUR_MS) });
+    await expect(service.join('SHUT02')).rejects.toThrow(RoomClosedError);
+  });
 
   it('does not issue a token when the Room is expired', async () => {
     const { service, repo, tokenIssuer } = setup([]);

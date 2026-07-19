@@ -40,6 +40,7 @@ class FakeManager {
 class FakeSocket {
   private readonly handlers = new Map<string, Handler>();
   readonly io = new FakeManager();
+  connected = true;
   readonly sent: string[] = [];
   on(event: string, cb: Handler): this {
     this.handlers.set(event, cb);

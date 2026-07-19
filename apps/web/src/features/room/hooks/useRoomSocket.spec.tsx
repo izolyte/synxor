@@ -32,6 +32,8 @@ class FakeManager {
 class FakeSocket {
   private readonly handlers = new Map<string, Handler>();
   readonly io = new FakeManager();
+  // Mirrors socket.io's connection flag; closeRoom refuses to emit without it.
+  connected = true;
   // Outgoing emits the hook makes (e.g. sendText), so a test can assert them.
   readonly sent: Array<{ event: string; payload?: unknown }> = [];
   // The ack an emit-with-callback (closeRoom) resolves to; tests override it.
@@ -319,5 +321,17 @@ suite("useRoomSocket", () => {
 
     await screen.find({ role: "button", name: "close" }).click();
     await screen.find({ testId: "close-result" }).shouldHaveText('{"error":"No connection"}');
+  });
+
+  test("closeRoom fails fast instead of hanging on a disconnected socket", async () => {
+    // A socket exists but isn't connected (dropped / lost): the emit would buffer
+    // and its ack never fire, so closeRoom must resolve an error, not hang.
+    const socket = new FakeSocket();
+    socket.connected = false;
+    const screen = renderComponent(<Harness token="tok" socket={socket} />);
+
+    await screen.find({ role: "button", name: "close" }).click();
+    await screen.find({ testId: "close-result" }).shouldHaveText('{"error":"No connection"}');
+    expect(socket.sent.some((s) => s.event === "room:close")).toBe(false);
   });
 });

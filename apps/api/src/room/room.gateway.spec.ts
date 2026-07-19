@@ -501,6 +501,9 @@ describe('RoomGateway', () => {
     expect(fakeRoomService.closed).toEqual(['room-1']);
     await closed; // Receiver was told before being cut off
     await gone; // …then disconnected
+    // The initiating Sender is kept connected so its ack lands — it leaves by
+    // navigating away, not by being kicked.
+    expect(sender.connected).toBe(true);
   });
 
   it('rejects a Receiver trying to close the Room and purges nothing', async () => {

@@ -57,6 +57,10 @@ export type SocketFactory = (token: string) => Socket;
 const defaultFactory: SocketFactory = (token) =>
   createRoomSocket(resolveApiOrigin(import.meta.env), token);
 
+// How long to wait for the server's close ack before giving up and surfacing an
+// error, so a dropped request never leaves the delete button spinning.
+const CLOSE_ACK_TIMEOUT_MS = 5000;
+
 /**
  * Subscribes to live Room activity — Receiver presence, file progress, and
  * incoming Text/Link payloads — and exposes sendText for the Sender to push one.
@@ -163,11 +167,24 @@ export function useRoomSocket(
 
   const closeRoom = useCallback((): Promise<RoomCloseAck> => {
     const socket = socketRef.current;
-    if (!socket) return Promise.resolve({ error: "No connection" });
+    // Require a *connected* socket: on a disconnected/lost one the emit just
+    // buffers and its ack never fires, leaving the caller (and the delete button)
+    // hanging forever. Fail fast so the UI can recover.
+    if (!socket || !socket.connected) return Promise.resolve({ error: "No connection" });
     return new Promise((resolve) => {
-      socket.emit(RoomEvent.Close, (ack: RoomCloseAck) =>
-        resolve(ack ?? { error: "No response" }),
-      );
+      let settled = false;
+      const finish = (ack: RoomCloseAck) => {
+        if (settled) return;
+        settled = true;
+        resolve(ack);
+      };
+      // Backstop the ack: a server that drops mid-request must surface an error,
+      // not spin the button indefinitely.
+      const timer = setTimeout(() => finish({ error: "No response" }), CLOSE_ACK_TIMEOUT_MS);
+      socket.emit(RoomEvent.Close, (ack: RoomCloseAck) => {
+        clearTimeout(timer);
+        finish(ack ?? { error: "No response" });
+      });
     });
   }, []);
 

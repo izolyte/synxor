@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ROOM_REPOSITORY, type RoomRepository } from '../domain/room/room.repository';
 import {
+  RoomClosedError,
   RoomCodeCollisionError,
   RoomCodeExhaustionError,
   RoomExpiredError,
@@ -65,6 +66,9 @@ export class RoomService {
   async join(roomCode: string): Promise<JoinRoomResult> {
     const room = await this.rooms.findByCode(roomCode);
     if (!room) throw new RoomNotFoundError(roomCode);
+    // A deliberately-closed Room reads differently from a lapsed one — check it
+    // before isExpired(), which folds every non-ACTIVE status into "expired".
+    if (room.status === 'CLOSED') throw new RoomClosedError(roomCode);
     if (isExpired(room)) throw new RoomExpiredError(roomCode);
 
     const roomToken = this.tokenIssuer.sign(

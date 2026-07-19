@@ -5,7 +5,11 @@ import { RoomService } from '../../room/room.service';
 import { createRoomSchema } from '../../room/dto/create-room.dto';
 import { joinRoomSchema } from '../../room/dto/join-room.dto';
 import { roomTransfersSchema } from '../../room/dto/room-transfers.dto';
-import { RoomExpiredError, RoomNotFoundError } from '../../domain/room/room.errors';
+import {
+  RoomClosedError,
+  RoomExpiredError,
+  RoomNotFoundError,
+} from '../../domain/room/room.errors';
 
 @Injectable()
 export class RoomRouter {
@@ -24,10 +28,14 @@ export class RoomRouter {
         try {
           return await this.roomService.join(input.roomCode);
         } catch (err) {
-          // A missing or expired Room is a client-visible "bad code", not a server
-          // fault — surface NOT_FOUND so the web client can tell it apart from a 5xx
-          // and react accordingly (retype vs retry).
-          if (err instanceof RoomNotFoundError || err instanceof RoomExpiredError) {
+          // A missing, expired, or closed Room is a client-visible "bad code", not
+          // a server fault — surface NOT_FOUND so the web client can tell it apart
+          // from a 5xx and react accordingly (retype vs retry).
+          if (
+            err instanceof RoomNotFoundError ||
+            err instanceof RoomExpiredError ||
+            err instanceof RoomClosedError
+          ) {
             throw new TRPCError({ code: 'NOT_FOUND', message: err.message, cause: err });
           }
           throw err;
