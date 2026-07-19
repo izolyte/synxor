@@ -73,8 +73,12 @@ suite("Full transfer — happy path", () => {
       await sender.find(selectors.transfer.compose).type(SNIPPET);
       await sender.find(selectors.transfer.send).click();
 
-      // Receiver sees the snippet arrive and copies it.
-      await receiver.find(selectors.transfer.incomingText(SNIPPET)).shouldBeVisible();
+      // Receiver sees the snippet arrive (in the Log, which also lists it) and
+      // copies it from the incoming row's Copy snippet button.
+      await receiver
+        .within(selectors.transfer.log)
+        .find(selectors.transfer.incomingText(SNIPPET))
+        .shouldBeVisible();
       await receiver.find(selectors.transfer.copySnippet).click();
       await receiver.find(selectors.transfer.copied).shouldBeVisible();
     },
