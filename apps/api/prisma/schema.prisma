@@ -62,6 +62,7 @@ model Transfer {
 
   room        Room         @relation(fields: [roomId], references: [id])
   filePayload FilePayload?
+  textPayload TextPayload?
   delivery    Delivery?
 
   @@index([roomId])
@@ -74,6 +75,18 @@ model FilePayload {
   fileSizeBytes BigInt
   mimeType      String
   storageKey    String
+
+  transfer Transfer @relation(fields: [transferId], references: [id])
+}
+
+// A persisted Text Snippet or Link. Files land in object storage via
+// FilePayload; text is small and structured, so it lives inline in Postgres —
+// the whole point is that it survives reload and late-join like a file does.
+model TextPayload {
+  id         String   @id @default(cuid())
+  transferId String   @unique
+  content    String
+  createdAt  DateTime @default(now())
 
   transfer Transfer @relation(fields: [transferId], references: [id])
 }

@@ -1,7 +1,9 @@
 import type {
   CreateFilePayloadInput,
+  CreateTextPayloadInput,
   CreateTransferInput,
   FilePayload,
+  TextPayload,
   Transfer,
 } from './transfer.entity';
 import type { TransferRepository } from './transfer.repository';
@@ -9,6 +11,7 @@ import type { TransferRepository } from './transfer.repository';
 export class FakeTransferRepository implements TransferRepository {
   readonly transfers = new Map<string, Transfer>();
   readonly filePayloads = new Map<string, FilePayload>();
+  readonly textPayloads = new Map<string, TextPayload>();
   private seq = 0;
 
   create(input: CreateTransferInput): Promise<Transfer> {
@@ -46,6 +49,17 @@ export class FakeTransferRepository implements TransferRepository {
     return Promise.resolve([...this.filePayloads.values()].filter((p) => ids.has(p.transferId)));
   }
 
+  createTextPayload(input: CreateTextPayloadInput): Promise<TextPayload> {
+    const payload: TextPayload = { id: `text-${++this.seq}`, ...input };
+    this.textPayloads.set(payload.transferId, payload);
+    return Promise.resolve(payload);
+  }
+
+  findTextPayloadsByTransferIds(transferIds: string[]): Promise<TextPayload[]> {
+    const ids = new Set(transferIds);
+    return Promise.resolve([...this.textPayloads.values()].filter((p) => ids.has(p.transferId)));
+  }
+
   listStorageKeysByRoomId(roomId: string): Promise<string[]> {
     const keys = [...this.transfers.values()]
       .filter((t) => t.roomId === roomId)
@@ -57,6 +71,7 @@ export class FakeTransferRepository implements TransferRepository {
   deleteById(id: string): Promise<void> {
     this.transfers.delete(id);
     this.filePayloads.delete(id);
+    this.textPayloads.delete(id);
     return Promise.resolve();
   }
 
@@ -65,6 +80,7 @@ export class FakeTransferRepository implements TransferRepository {
       if (transfer.roomId === roomId) {
         this.transfers.delete(transfer.id);
         this.filePayloads.delete(transfer.id);
+        this.textPayloads.delete(transfer.id);
       }
     }
     return Promise.resolve();

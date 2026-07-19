@@ -258,10 +258,36 @@ describe('RoomService.transfers', () => {
       payloadType: 'FILE',
       fileName: 'video.mp4',
       fileSizeBytes: 2048,
+      content: null,
       delivered: false,
       createdAt: transfer.createdAt.toISOString(),
     });
     expect(typeof item.fileSizeBytes).toBe('number');
+  });
+
+  it('maps a Text/Link Transfer with its persisted content', async () => {
+    const { service, repo, transfers } = setup([]);
+    const room = seedRoom(repo, { code: 'LOG003' });
+    const transfer = await transfers.create({
+      roomId: room.id,
+      payloadType: 'LINK',
+      contentLength: BigInt(19),
+    });
+    await transfers.createTextPayload({
+      transferId: transfer.id,
+      content: 'https://example.com',
+    });
+
+    const [item] = await service.listTransfers('LOG003');
+    expect(item).toEqual({
+      id: transfer.id,
+      payloadType: 'LINK',
+      fileName: null,
+      fileSizeBytes: null,
+      content: 'https://example.com',
+      delivered: false,
+      createdAt: transfer.createdAt.toISOString(),
+    });
   });
 
   it('marks a Transfer delivered once a Delivery row exists', async () => {

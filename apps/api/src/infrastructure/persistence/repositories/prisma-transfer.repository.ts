@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import type { Transfer as PrismaTransfer, FilePayload as PrismaFilePayload } from '@prisma/client';
+import type {
+  Transfer as PrismaTransfer,
+  FilePayload as PrismaFilePayload,
+  TextPayload as PrismaTextPayload,
+} from '@prisma/client';
 import type {
   Transfer,
   FilePayload,
+  TextPayload,
   PayloadType,
   CreateTransferInput,
   CreateFilePayloadInput,
+  CreateTextPayloadInput,
 } from '../../../domain/transfer/transfer.entity';
 import type { TransferRepository } from '../../../domain/transfer/transfer.repository';
 import { PrismaService } from '../prisma/prisma.service';
@@ -48,6 +54,18 @@ export class PrismaTransferRepository implements TransferRepository {
     return fps.map((fp) => this.toFilePayloadEntity(fp));
   }
 
+  async createTextPayload(input: CreateTextPayloadInput): Promise<TextPayload> {
+    return this.toTextPayloadEntity(await this.prisma.textPayload.create({ data: input }));
+  }
+
+  async findTextPayloadsByTransferIds(transferIds: string[]): Promise<TextPayload[]> {
+    if (transferIds.length === 0) return [];
+    const tps = await this.prisma.textPayload.findMany({
+      where: { transferId: { in: transferIds } },
+    });
+    return tps.map((tp) => this.toTextPayloadEntity(tp));
+  }
+
   async listStorageKeysByRoomId(roomId: string): Promise<string[]> {
     const payloads = await this.prisma.filePayload.findMany({
       where: { transfer: { roomId } },
@@ -57,12 +75,13 @@ export class PrismaTransferRepository implements TransferRepository {
   }
 
   async deleteById(id: string): Promise<void> {
-    // FilePayload and Delivery both hold a required FK to Transfer with no DB-level
-    // cascade, so the children go first — one transaction keeps the graph from
-    // being left half-deleted if a step fails.
+    // FilePayload, TextPayload and Delivery each hold a required FK to Transfer
+    // with no DB-level cascade, so the children go first — one transaction keeps
+    // the graph from being left half-deleted if a step fails.
     await this.prisma.$transaction([
       this.prisma.delivery.deleteMany({ where: { transferId: id } }),
       this.prisma.filePayload.deleteMany({ where: { transferId: id } }),
+      this.prisma.textPayload.deleteMany({ where: { transferId: id } }),
       this.prisma.transfer.deleteMany({ where: { id } }),
     ]);
   }
@@ -71,6 +90,7 @@ export class PrismaTransferRepository implements TransferRepository {
     await this.prisma.$transaction([
       this.prisma.delivery.deleteMany({ where: { transfer: { roomId } } }),
       this.prisma.filePayload.deleteMany({ where: { transfer: { roomId } } }),
+      this.prisma.textPayload.deleteMany({ where: { transfer: { roomId } } }),
       this.prisma.transfer.deleteMany({ where: { roomId } }),
     ]);
   }
@@ -94,6 +114,10 @@ export class PrismaTransferRepository implements TransferRepository {
       mimeType: fp.mimeType,
       storageKey: fp.storageKey,
     };
+  }
+
+  private toTextPayloadEntity(tp: PrismaTextPayload): TextPayload {
+    return { id: tp.id, transferId: tp.transferId, content: tp.content };
   }
 }
 

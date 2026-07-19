@@ -21,6 +21,9 @@ export interface RoomTransferItem {
   payloadType: PayloadType;
   fileName: string | null;
   fileSizeBytes: number | null;
+  // The Text Snippet / Link body for TEXT_SNIPPET and LINK transfers; null for
+  // files (their bytes live in object storage, not the Log).
+  content: string | null;
   delivered: boolean;
   createdAt: string;
 }

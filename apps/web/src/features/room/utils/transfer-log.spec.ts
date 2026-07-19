@@ -12,8 +12,22 @@ function historyFile(over: Partial<TransferHistory[number]> = {}): TransferHisto
     payloadType: "FILE",
     fileName: "report.pdf",
     fileSizeBytes: 1024,
+    content: null,
     delivered: true,
     createdAt: "2026-01-01T10:00:00.000Z",
+    ...over,
+  };
+}
+
+function historyText(over: Partial<TransferHistory[number]> = {}): TransferHistory[number] {
+  return {
+    id: "ht1",
+    payloadType: "TEXT_SNIPPET",
+    fileName: null,
+    fileSizeBytes: null,
+    content: "saved note",
+    delivered: true,
+    createdAt: "2026-01-01T10:05:00.000Z",
     ...over,
   };
 }
@@ -106,6 +120,45 @@ suite("mergeTransferLog", () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe("delivered");
+  });
+
+  test("hydrates a persisted snippet from history with its content", () => {
+    const [row] = mergeTransferLog({ history: [historyText()], ...noLive });
+    expect(row).toMatchObject({
+      id: "ht1",
+      kind: "snippet",
+      name: "saved note",
+      value: "saved note",
+      status: "delivered",
+    });
+  });
+
+  test("hydrates a persisted link from history with an href", () => {
+    const [row] = mergeTransferLog({
+      history: [
+        historyText({ id: "hl1", payloadType: "LINK", content: "https://example.com/x" }),
+      ],
+      ...noLive,
+    });
+    expect(row).toMatchObject({
+      id: "hl1",
+      kind: "link",
+      name: "https://example.com/x",
+      href: "https://example.com/x",
+      status: "delivered",
+    });
+  });
+
+  test("a live text event and its persisted history row collapse to one", () => {
+    const rows = mergeTransferLog({
+      ...noLive,
+      history: [historyText({ id: "dup", content: "note" })],
+      texts: [text({ transferId: "dup", content: "note" })],
+      liveTimestamps: new Map([["dup", Date.parse("2026-01-01T11:00:00.000Z")]]),
+    });
+    expect(rows).toHaveLength(1);
+    // History owns the timestamp even when a live event trails it.
+    expect(rows[0].receivedAt).toBe(Date.parse("2026-01-01T10:05:00.000Z"));
   });
 
   test("maps a text snippet to a copyable snippet row", () => {

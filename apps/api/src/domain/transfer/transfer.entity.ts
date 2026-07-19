@@ -33,3 +33,14 @@ export interface CreateFilePayloadInput {
   mimeType: string;
   storageKey: string;
 }
+
+export interface TextPayload {
+  id: string;
+  transferId: string;
+  content: string;
+}
+
+export interface CreateTextPayloadInput {
+  transferId: string;
+  content: string;
+}

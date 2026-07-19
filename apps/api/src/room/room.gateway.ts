@@ -1,5 +1,4 @@
 import { Inject, Logger } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -13,6 +12,10 @@ import { TOKEN_VERIFIER, type TokenVerifier } from '../domain/security/token-ver
 import { TokenRole, type TokenClaims } from '../domain/security/token-issuer';
 import type { ParticipantRole } from '../domain/participant/participant.entity';
 import { classifyTextPayload } from '../domain/transfer/text-payload';
+import {
+  TRANSFER_REPOSITORY,
+  type TransferRepository,
+} from '../domain/transfer/transfer.repository';
 import { sendTextSchema } from '../transfer/dto/text-payload.dto';
 import {
   TransferEvent,
@@ -41,6 +44,7 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
 
   constructor(
     @Inject(TOKEN_VERIFIER) private readonly tokenVerifier: TokenVerifier,
+    @Inject(TRANSFER_REPOSITORY) private readonly transfers: TransferRepository,
     private readonly presence: RoomPresenceService,
   ) {}
 
@@ -48,11 +52,16 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
     this.server.to(roomId).emit(event, payload);
   }
 
-  // The Sender submits a Text Snippet / Link; the server classifies it and
-  // broadcasts to the rest of the Room. Nothing is stored — this is socket-only.
-  // The ack returns the new transferId (or a reason) to the emitting client.
+  // The Sender submits a Text Snippet / Link; the server classifies it, persists
+  // it, then broadcasts to the rest of the Room. Persistence comes first so the
+  // Transfer Log can hydrate it on reload/late-join — the transferId is the
+  // persisted row's id, shared by the ack and the broadcast so both sides key on
+  // the same value. The ack returns that id (or a reason) to the emitting client.
   @SubscribeMessage(TransferEvent.SendText)
-  handleSendText(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown): TransferTextAck {
+  async handleSendText(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: unknown,
+  ): Promise<TransferTextAck> {
     const info = this.connected.get(socket.id);
     if (!info || info.role !== 'SENDER') {
       return { error: 'Only the Sender may send text' };
@@ -62,10 +71,33 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
       return { error: parsed.error.issues[0]?.message ?? 'Invalid text payload' };
     }
     const { payloadType, content } = classifyTextPayload(parsed.data.text);
-    const payload: TransferTextPayload = { transferId: randomUUID(), payloadType, content };
+
+    let transferId: string;
+    try {
+      transferId = await this.persistText(info.roomId, payloadType, content);
+    } catch (err) {
+      this.logger.error(`Failed to persist text transfer for Room ${info.roomId}`, err);
+      return { error: 'Could not send — try again' };
+    }
+
+    const payload: TransferTextPayload = { transferId, payloadType, content };
     // `socket.to` excludes the Sender — they already have it and get the ack.
     socket.to(info.roomId).emit(TransferEvent.Text, payload);
-    return { transferId: payload.transferId };
+    return { transferId };
+  }
+
+  private async persistText(
+    roomId: string,
+    payloadType: TransferTextPayload['payloadType'],
+    content: string,
+  ): Promise<string> {
+    const transfer = await this.transfers.create({
+      roomId,
+      payloadType,
+      contentLength: BigInt(Buffer.byteLength(content, 'utf8')),
+    });
+    await this.transfers.createTextPayload({ transferId: transfer.id, content });
+    return transfer.id;
   }
 
   async handleConnection(socket: Socket): Promise<void> {
