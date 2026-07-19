@@ -41,7 +41,10 @@ model Participant {
   id             String          @id @default(cuid())
   roomId         String
   role           ParticipantRole
-  tokenHash      String          @unique
+  // Not unique: a Participant row is one connection, not one token. The same
+  // token reconnects (refresh, socket.io retry) as a fresh row, so the hash
+  // repeats across a session — kept only as an audit trail of who joined.
+  tokenHash      String
   joinedAt       DateTime        @default(now())
   disconnectedAt DateTime?
 
