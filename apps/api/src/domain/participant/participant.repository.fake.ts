@@ -23,10 +23,6 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
     return participant;
   }
 
-  async findByTokenHash(hash: string): Promise<Participant | null> {
-    return [...this.stored.values()].find((p) => p.tokenHash === hash) ?? null;
-  }
-
   async findByRoomId(roomId: string): Promise<Participant[]> {
     return [...this.stored.values()].filter((p) => p.roomId === roomId);
   }
@@ -44,5 +40,16 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
       (p) =>
         p.roomId === roomId && p.disconnectedAt === null && (role === undefined || p.role === role),
     ).length;
+  }
+
+  async markAllDisconnected(at: Date): Promise<number> {
+    let count = 0;
+    for (const [id, p] of this.stored) {
+      if (p.disconnectedAt === null) {
+        this.stored.set(id, { ...p, disconnectedAt: at });
+        count++;
+      }
+    }
+    return count;
   }
 }

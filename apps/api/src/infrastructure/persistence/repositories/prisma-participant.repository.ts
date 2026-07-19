@@ -16,11 +16,6 @@ export class PrismaParticipantRepository implements ParticipantRepository {
     return this.toEntity(await this.prisma.participant.create({ data: input }));
   }
 
-  async findByTokenHash(hash: string): Promise<Participant | null> {
-    const p = await this.prisma.participant.findUnique({ where: { tokenHash: hash } });
-    return p ? this.toEntity(p) : null;
-  }
-
   async findByRoomId(roomId: string): Promise<Participant[]> {
     const participants = await this.prisma.participant.findMany({ where: { roomId } });
     return participants.map((p) => this.toEntity(p));
@@ -40,6 +35,14 @@ export class PrismaParticipantRepository implements ParticipantRepository {
     return this.prisma.participant.count({
       where: { roomId, disconnectedAt: null, ...(role ? { role } : {}) },
     });
+  }
+
+  async markAllDisconnected(at: Date): Promise<number> {
+    const { count } = await this.prisma.participant.updateMany({
+      where: { disconnectedAt: null },
+      data: { disconnectedAt: at },
+    });
+    return count;
   }
 
   private toEntity(p: PrismaParticipant): Participant {
