@@ -14,14 +14,16 @@ function makeStub(procedure: string): Stub {
   const route = `*${trpcProcedurePath(procedure)}`;
   return {
     async resolves(output) {
-      server.use(http.post(route, () => HttpResponse.json(trpcOk(output))));
+      // tRPC mutations ride POST, queries ride GET — register both so a stub
+      // covers a procedure without the caller knowing its verb (the Playwright
+      // adapter's page.route already matches any method).
+      const handler = () => HttpResponse.json(trpcOk(output));
+      server.use(http.post(route, handler), http.get(route, handler));
     },
     async rejects(error) {
-      server.use(
-        http.post(route, () =>
-          HttpResponse.json(trpcError(error), { status: trpcHttpStatus(error.code) }),
-        ),
-      );
+      const handler = () =>
+        HttpResponse.json(trpcError(error), { status: trpcHttpStatus(error.code) });
+      server.use(http.post(route, handler), http.get(route, handler));
     },
   };
 }
