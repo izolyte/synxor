@@ -161,6 +161,14 @@ suite("mergeTransferLog", () => {
     expect(rows[0].receivedAt).toBe(Date.parse("2026-01-01T10:05:00.000Z"));
   });
 
+  test("skips a persisted text/link row that has no content", () => {
+    const rows = mergeTransferLog({
+      ...noLive,
+      history: [historyText({ id: "empty", content: null })],
+    });
+    expect(rows).toHaveLength(0);
+  });
+
   test("maps a text snippet to a copyable snippet row", () => {
     const rows = mergeTransferLog({
       history: [],

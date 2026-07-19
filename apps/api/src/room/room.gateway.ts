@@ -91,12 +91,14 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
     payloadType: TransferTextPayload['payloadType'],
     content: string,
   ): Promise<string> {
-    const transfer = await this.transfers.create({
+    // One atomic write — a half-failure can't leave a Transfer row without its
+    // TextPayload, which the Log would otherwise hydrate as an empty ghost row.
+    const transfer = await this.transfers.createTextTransfer({
       roomId,
       payloadType,
+      content,
       contentLength: BigInt(Buffer.byteLength(content, 'utf8')),
     });
-    await this.transfers.createTextPayload({ transferId: transfer.id, content });
     return transfer.id;
   }
 

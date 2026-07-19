@@ -12,6 +12,7 @@ import type {
   CreateTransferInput,
   CreateFilePayloadInput,
   CreateTextPayloadInput,
+  CreateTextTransferInput,
 } from '../../../domain/transfer/transfer.entity';
 import type { TransferRepository } from '../../../domain/transfer/transfer.repository';
 import { PrismaService } from '../prisma/prisma.service';
@@ -56,6 +57,20 @@ export class PrismaTransferRepository implements TransferRepository {
 
   async createTextPayload(input: CreateTextPayloadInput): Promise<TextPayload> {
     return this.toTextPayloadEntity(await this.prisma.textPayload.create({ data: input }));
+  }
+
+  async createTextTransfer(input: CreateTextTransferInput): Promise<Transfer> {
+    // A nested create commits the Transfer and its TextPayload in one statement —
+    // no window where the Transfer exists without content.
+    const t = await this.prisma.transfer.create({
+      data: {
+        roomId: input.roomId,
+        payloadType: input.payloadType,
+        contentLength: input.contentLength,
+        textPayload: { create: { content: input.content } },
+      },
+    });
+    return this.toEntity(t);
   }
 
   async findTextPayloadsByTransferIds(transferIds: string[]): Promise<TextPayload[]> {

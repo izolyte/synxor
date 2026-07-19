@@ -387,6 +387,29 @@ describe('RoomGateway', () => {
     expect(await fakeTransfers.findByRoomId('room-1')).toHaveLength(0);
   });
 
+  it('returns an error and persists nothing when the write fails', async () => {
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    jest
+      .spyOn(fakeTransfers, 'createTextTransfer')
+      .mockRejectedValueOnce(new Error('db unavailable'));
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    const gotText = waitFor(receiver, 'transfer:text');
+    const ack = (await sendText(sender, 'https://example.com')) as { error: string };
+
+    expect(ack.error).toMatch(/Could not send/);
+    // No broadcast to the Receiver, and no half-written orphan Transfer left behind.
+    await new Promise((r) => setTimeout(r, 50));
+    await expect(Promise.race([gotText, Promise.resolve('none')])).resolves.toBe('none');
+    expect(await fakeTransfers.findByRoomId('room-1')).toHaveLength(0);
+  });
+
   it('does not echo the Text back to the Sender who sent it', async () => {
     fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
     fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });

@@ -44,3 +44,12 @@ export interface CreateTextPayloadInput {
   transferId: string;
   content: string;
 }
+
+// A Text Snippet / Link Transfer written as one unit: the Transfer row and its
+// TextPayload together, so a failure can't leave a Transfer with no content.
+export interface CreateTextTransferInput {
+  roomId: string;
+  payloadType: Extract<PayloadType, 'TEXT_SNIPPET' | 'LINK'>;
+  content: string;
+  contentLength: bigint;
+}

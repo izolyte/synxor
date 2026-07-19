@@ -1,6 +1,7 @@
 import type {
   CreateFilePayloadInput,
   CreateTextPayloadInput,
+  CreateTextTransferInput,
   CreateTransferInput,
   FilePayload,
   TextPayload,
@@ -53,6 +54,23 @@ export class FakeTransferRepository implements TransferRepository {
     const payload: TextPayload = { id: `text-${++this.seq}`, ...input };
     this.textPayloads.set(payload.transferId, payload);
     return Promise.resolve(payload);
+  }
+
+  createTextTransfer(input: CreateTextTransferInput): Promise<Transfer> {
+    const transfer: Transfer = {
+      id: `transfer-${++this.seq}`,
+      roomId: input.roomId,
+      payloadType: input.payloadType,
+      contentLength: input.contentLength,
+      createdAt: new Date(),
+    };
+    this.transfers.set(transfer.id, transfer);
+    this.textPayloads.set(transfer.id, {
+      id: `text-${++this.seq}`,
+      transferId: transfer.id,
+      content: input.content,
+    });
+    return Promise.resolve(transfer);
   }
 
   findTextPayloadsByTransferIds(transferIds: string[]): Promise<TextPayload[]> {

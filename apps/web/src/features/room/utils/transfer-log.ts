@@ -23,7 +23,10 @@ function snippetPreview(content: string): string {
   return content.replace(/\s+/g, " ").trim();
 }
 
-function historyRow(item: TransferHistory[number], downloadHref?: DownloadHref): TransferLogRow {
+function historyRow(
+  item: TransferHistory[number],
+  downloadHref?: DownloadHref,
+): TransferLogRow | null {
   const receivedAt = Date.parse(item.createdAt);
   if (item.payloadType === "FILE") {
     const name = item.fileName ?? "File";
@@ -39,9 +42,12 @@ function historyRow(item: TransferHistory[number], downloadHref?: DownloadHref):
   }
   // A persisted Text Snippet / Link. `content` carries the body so a reload or
   // late-join renders the same copy/open row the live socket feed produces —
-  // mirror liveTextRow so both paths yield identical rows.
+  // mirror liveTextRow so both paths yield identical rows. A null content means
+  // no readable body (nothing to copy or open), so skip it rather than render a
+  // blank, dead row.
+  if (item.content == null) return null;
   const isLink = item.payloadType === "LINK";
-  const content = item.content ?? "";
+  const content = item.content;
   return {
     id: item.id,
     kind: isLink ? "link" : "snippet",
@@ -115,7 +121,8 @@ export function mergeTransferLog({
   const rows = new Map<string, TransferLogRow>();
 
   for (const item of history) {
-    rows.set(item.id, historyRow(item, downloadHref));
+    const row = historyRow(item, downloadHref);
+    if (row) rows.set(item.id, row);
   }
 
   const overlay = (row: TransferLogRow) => {
