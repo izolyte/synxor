@@ -16,4 +16,11 @@ export interface TransferRepository {
   // Batched sibling of findFilePayloadByTransferId — one round-trip for a whole
   // Room's history instead of one per Transfer.
   findFilePayloadsByTransferIds(transferIds: string[]): Promise<FilePayload[]>;
+  // Storage keys for every FilePayload in a Room — what the expiry sweeper feeds
+  // to object storage before it drops the rows those keys point at.
+  listStorageKeysByRoomId(roomId: string): Promise<string[]>;
+  // Delete a Transfer graph (Transfer + its FilePayload/Delivery). Both variants
+  // cascade the dependent rows so callers never trip the FK constraints.
+  deleteById(id: string): Promise<void>;
+  deleteByRoomId(roomId: string): Promise<void>;
 }

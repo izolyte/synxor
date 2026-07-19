@@ -31,4 +31,8 @@ export interface UploadSessionStore {
   get(transferId: string): Promise<UploadSession | null>;
   markReceived(transferId: string, chunkIndex: number): Promise<UploadSession>;
   delete(transferId: string): Promise<void>;
+  // Sessions opened before `openedBefore` and never completed — a sender that
+  // walked away mid-upload. The sweeper reaps these to free the room slot and
+  // clear the partial chunk objects they left in storage.
+  findAbandoned(openedBefore: Date): Promise<UploadSession[]>;
 }

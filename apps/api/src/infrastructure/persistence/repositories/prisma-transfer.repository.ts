@@ -48,6 +48,33 @@ export class PrismaTransferRepository implements TransferRepository {
     return fps.map((fp) => this.toFilePayloadEntity(fp));
   }
 
+  async listStorageKeysByRoomId(roomId: string): Promise<string[]> {
+    const payloads = await this.prisma.filePayload.findMany({
+      where: { transfer: { roomId } },
+      select: { storageKey: true },
+    });
+    return payloads.map((p) => p.storageKey);
+  }
+
+  async deleteById(id: string): Promise<void> {
+    // FilePayload and Delivery both hold a required FK to Transfer with no DB-level
+    // cascade, so the children go first — one transaction keeps the graph from
+    // being left half-deleted if a step fails.
+    await this.prisma.$transaction([
+      this.prisma.delivery.deleteMany({ where: { transferId: id } }),
+      this.prisma.filePayload.deleteMany({ where: { transferId: id } }),
+      this.prisma.transfer.deleteMany({ where: { id } }),
+    ]);
+  }
+
+  async deleteByRoomId(roomId: string): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.delivery.deleteMany({ where: { transfer: { roomId } } }),
+      this.prisma.filePayload.deleteMany({ where: { transfer: { roomId } } }),
+      this.prisma.transfer.deleteMany({ where: { roomId } }),
+    ]);
+  }
+
   private toEntity(t: PrismaTransfer): Transfer {
     return {
       id: t.id,

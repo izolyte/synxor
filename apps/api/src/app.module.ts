@@ -13,6 +13,7 @@ import { REDIS_CLIENT } from './infrastructure/redis/redis.constants';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { TrpcModule } from './trpc/trpc.module';
 import { TransferModule } from './transfer/transfer.module';
+import { SweeperModule } from './sweeper/sweeper.module';
 
 // Per-IP request budget — generous enough for normal Room traffic, tight
 // enough to blunt brute-forcing of the 6-character Room Code space.
@@ -36,6 +37,7 @@ const THROTTLE_LIMIT = 100;
     StorageModule,
     TrpcModule,
     TransferModule,
+    SweeperModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
