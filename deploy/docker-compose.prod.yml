@@ -27,6 +27,18 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      # web gates on api being healthy, and the deploy job waits on it too. The
+      # image is a bare Node runtime with no curl, so probe /health via Node's
+      # built-in fetch.
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -77,7 +89,10 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      # Console bound to loopback only — the admin UI never faces the internet;
+      # reach it over an SSH tunnel. The S3 API (:9000) stays internal to the
+      # network and isn't published at all.
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s

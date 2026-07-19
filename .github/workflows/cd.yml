@@ -79,6 +79,9 @@ jobs:
     environment: production
     permissions:
       contents: read
+      # GITHUB_TOKEN is forwarded to the VPS as REGISTRY_TOKEN to pull the private
+      # GHCR images — it needs packages:read or `docker compose pull` gets denied.
+      packages: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -119,9 +122,12 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
             docker logout "$REGISTRY" || true
+            # Ask compose which host port api:3000 actually maps to, rather than
+            # assuming 3000 — the operator's .env may set API_PORT to anything.
+            api_port="$(docker compose -f docker-compose.prod.yml port api 3000 | cut -d: -f2)"
             # Fail the deploy if the api never reports healthy (~60s budget).
             for i in $(seq 1 30); do
-              if curl -fsS "http://localhost:${API_PORT:-3000}/health" | grep -q '"status":"ok"'; then
+              if curl -fsS "http://127.0.0.1:${api_port}/health" | grep -q '"status":"ok"'; then
                 echo "health check passed"
                 exit 0
               fi
