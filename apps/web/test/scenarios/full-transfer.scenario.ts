@@ -69,7 +69,10 @@ suite("Full transfer — happy path", () => {
       await receiver.within(selectors.transfer.log).find(selectors.transfer.delivered).shouldBeVisible();
       await sender.within(selectors.transfer.log).find(selectors.transfer.delivered).shouldBeVisible();
 
-      // Text Snippet happy path: Sender pastes a snippet and sends it.
+      // Text Snippet happy path: Sender pastes a snippet and sends it. Focus the
+      // field first — right after the delivery flash the view is still settling,
+      // and typing into an unfocused textarea can drop the input.
+      await sender.find(selectors.transfer.compose).click();
       await sender.find(selectors.transfer.compose).type(SNIPPET);
       await sender.find(selectors.transfer.send).click();
 
