@@ -7,7 +7,7 @@
 
 import { createElement } from "react";
 import userEvent from "@testing-library/user-event";
-import { render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { expect as vitestExpect } from "vitest";
 
@@ -32,6 +32,10 @@ export function createVitestDriver(): Driver {
       }
     },
     async visit(path) {
+      // Tear down any prior render first — a scenario that visits twice must not
+      // leave the old route tree mounted alongside the new one, or find() would
+      // match stale elements.
+      cleanup();
       router = createRouter({
         history: createMemoryHistory({ initialEntries: [path] }),
       });
@@ -39,7 +43,10 @@ export function createVitestDriver(): Driver {
       await router.load();
     },
     async currentPath() {
-      return router?.state.location.href ?? "/";
+      // Pathname + search only, matching the Playwright driver and the port
+      // contract — the hash is deliberately dropped so both runners agree.
+      const loc = router?.state.location;
+      return loc ? `${loc.pathname}${loc.searchStr}` : "/";
     },
   };
 }

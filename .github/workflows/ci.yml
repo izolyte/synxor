@@ -108,6 +108,18 @@ jobs:
       - run: cp .env.example .env
       # Build the images and start the stack; api gates web via its healthcheck.
       - run: docker compose up -d --build --wait
+      # `--wait` only gates on container health, and the web service has no
+      # healthcheck of its own — so poll the mapped port until the SSR process is
+      # actually serving before Playwright's first navigation hits it.
+      - name: Wait for web to be reachable
+        run: |
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:3001 && exit 0
+            sleep 2
+          done
+          echo "web did not start serving on :3001 within 120s" >&2
+          docker compose logs --no-color web >&2 || true
+          exit 1
       - name: Run E2E scenarios
         env:
           # Point Playwright at the composed web service (host-mapped :3001) and

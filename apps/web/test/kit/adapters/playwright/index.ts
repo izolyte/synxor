@@ -21,10 +21,21 @@ const expect = pwExpect as unknown as Expect;
 // fixture; `openActor` mints extra actors as fresh browser contexts (isolated
 // storage + socket) and closes them when the test ends.
 function runScenario(body: (ctx: ScenarioContext) => Promise<void>) {
-  return async ({ page, browser }: { page: Page; browser: Browser }) => {
+  return async ({
+    page,
+    browser,
+    baseURL,
+  }: {
+    page: Page;
+    browser: Browser;
+    baseURL?: string;
+  }) => {
     const opened: BrowserContext[] = [];
     const openActor = async (): Promise<Driver> => {
-      const context = await browser.newContext();
+      // A hand-built context doesn't inherit the config's use.baseURL (only the
+      // page fixture does), so pass it through — else the actor's relative
+      // navigations have no base to resolve against.
+      const context = await browser.newContext({ baseURL });
       opened.push(context);
       return createPlaywrightDriver(await context.newPage());
     };
