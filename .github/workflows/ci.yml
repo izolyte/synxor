@@ -106,20 +106,23 @@ jobs:
       - run: pnpm --filter web exec playwright install --with-deps chromium
       # Compose reads its config from .env; the checked-in example is CI-safe.
       - run: cp .env.example .env
-      # Build the images and start the stack; api gates web via its healthcheck.
-      - run: docker compose up -d --build --wait
-      # `--wait` only gates on container health, and the web service has no
-      # healthcheck of its own — so poll the mapped port until the SSR process is
-      # actually serving before Playwright's first navigation hits it.
-      - name: Wait for web to be reachable
+      # Build + start the stack WITHOUT --wait so the diagnostic below always runs.
+      - run: docker compose up -d --build
+      # TEMP diagnostic (#81): why does the web container's healthcheck fail?
+      - name: Diagnose web healthcheck
+        if: always()
         run: |
-          for _ in $(seq 1 60); do
-            curl -sf -o /dev/null http://localhost:3001 && exit 0
-            sleep 2
-          done
-          echo "web did not start serving on :3001 within 120s" >&2
-          docker compose logs --no-color web >&2 || true
-          exit 1
+          sleep 45
+          echo "===== docker compose ps ====="
+          docker compose ps
+          echo "===== web .State.Health ====="
+          docker inspect --format '{{json .State.Health}}' synxor-web-1 || true
+          echo "===== wget present in web image? ====="
+          docker exec synxor-web-1 sh -c 'command -v wget || echo NO_WGET' || true
+          echo "===== manual probe from inside web ====="
+          docker exec synxor-web-1 sh -c 'wget -qO- http://localhost:3000/healthz; echo " EXIT=$?"' || true
+          echo "===== web logs ====="
+          docker compose logs --no-color web | tail -30
       - name: Run E2E scenarios
         env:
           # Point Playwright at the composed web service (host-mapped :3001) and
