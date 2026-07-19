@@ -60,6 +60,8 @@ function makeScreen(root: LocatorRoot): Screen {
   return {
     find: (selector: Selector) => element(() => locatorFor(root, selector)),
     within: (region) => makeScreen(locatorFor(root, region)),
+    attach: (selector, files) =>
+      locatorFor(root, selector).setInputFiles(files as string[]),
   };
 }
 
@@ -83,9 +85,12 @@ export function createPlaywrightDriver(page: Page): Driver {
     rpc: (procedure) => makeStub(page, procedure),
   };
   return {
-    find: screen.find,
-    within: screen.within,
+    ...screen,
     backend,
+    async currentPath() {
+      const url = new URL(page.url());
+      return `${url.pathname}${url.search}`;
+    },
     async seed(state) {
       const entries = Object.entries(state.localStorage ?? {});
       if (entries.length === 0) return;

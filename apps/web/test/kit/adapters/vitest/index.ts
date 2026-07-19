@@ -11,8 +11,39 @@ import {
   vi,
 } from "vitest";
 
-import type { Expect, Mock, Runtime } from "../../types";
+import type {
+  Driver,
+  Expect,
+  Mock,
+  Runtime,
+  ScenarioApi,
+  ScenarioContext,
+} from "../../types";
 import { createVitestDriver } from "./driver";
+
+// A second actor means a second browser context + socket — jsdom has one render
+// tree and no server, so the multi-context journeys stay Playwright-only.
+function runScenario(body: (ctx: ScenarioContext) => Promise<void>) {
+  return () =>
+    body({
+      driver: createVitestDriver(),
+      openActor: () =>
+        Promise.reject(
+          new Error(
+            "openActor (second actor) is E2E-only — run this journey under Playwright (pnpm test:e2e).",
+          ),
+        ) as Promise<Driver>,
+    });
+}
+
+const scenario: ScenarioApi = Object.assign(
+  (name: string, body: (ctx: ScenarioContext) => Promise<void>) =>
+    it(name, runScenario(body)),
+  {
+    skip: (name: string, body: (ctx: ScenarioContext) => Promise<void>) =>
+      it.skip(name, runScenario(body)),
+  },
+);
 
 // Runtime keeps the full Vitest matchers; the type narrows callers to the
 // curated, swappable subset.
@@ -30,10 +61,7 @@ function fn<Args extends unknown[], Return>(
 export const runtime: Runtime = {
   suite: (name, body) => describe(name, body),
   test: (name, body) => it(name, body),
-  scenario: (name, body) =>
-    it(name, async () => {
-      await body({ driver: createVitestDriver() });
-    }),
+  scenario,
   beforeEach: (body) => vitestBeforeEach(body),
   afterEach: (body) => vitestAfterEach(body),
   expect,

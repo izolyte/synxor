@@ -58,6 +58,11 @@ export interface Screen {
   find(selector: ActionableSelector): Element;
   find(selector: ReadonlySelector): Assertions;
   within(region: Selector): Screen;
+  // Stages files on a file input (a drop zone's hidden <input type="file">) the
+  // way choosing them in the OS picker would — the seam for a Sender sending a
+  // file. E2E-only: a jsdom adapter can't read real paths off disk, so it throws.
+  // (kit capability: file upload)
+  attach(selector: ActionableSelector, files: readonly string[]): Promise<void>;
 }
 
 // Controls the network a UI sees. Generic: mocks an RPC procedure by name and
@@ -85,6 +90,10 @@ export interface SeedState {
 export interface Driver extends Screen {
   seed(state: SeedState): Promise<void>;
   visit(path: string): Promise<void>;
+  // The app's current path — pathname plus search, e.g. "/room/AB12CD". Lets a
+  // journey read a value the server put in the URL (a Room Code) and hand it to a
+  // second actor, without coupling to markup.
+  currentPath(): Promise<string>;
   readonly backend: BackendMock;
 }
 
@@ -117,10 +126,24 @@ export interface HookResult<T> {
 // run the shared async contract, and it is single-context.
 export type E2eDriver = "playwright" | "selenium" | "webdriverio";
 
-// What a journey spec receives: a Driver and nothing more. Building a domain App
-// from it is the app layer's job, so the tool stays business-free.
+// What a journey spec receives: the primary Driver plus a way to open more actors.
+// Building a domain App from these is the app layer's job, so the tool stays
+// business-free.
 export interface ScenarioContext {
   readonly driver: Driver;
+  // Opens a second, fully isolated actor — its own browser context, storage, and
+  // socket — for two-party journeys (Sender + Receiver). E2E-only: the component
+  // runtime has a single render tree, so it throws. (kit capability: multi-context)
+  openActor(): Promise<Driver>;
+}
+
+// A scenario registration that can also be marked pending. `skip` registers the
+// journey but reports it skipped rather than run — the honest state for a spec
+// that's written but blocked on a dependency (a feature or the live stack) that
+// isn't in place yet, never a silent green.
+export interface ScenarioApi {
+  (name: string, body: (ctx: ScenarioContext) => Promise<void>): void;
+  skip(name: string, body: (ctx: ScenarioContext) => Promise<void>): void;
 }
 
 // One adapter per runner; `~test/runtime` resolves to one of these. Only the
@@ -130,7 +153,7 @@ export interface ScenarioContext {
 export interface Runtime {
   suite(name: string, body: () => void): void;
   test(name: string, body: () => unknown | Promise<unknown>): void;
-  scenario(name: string, body: (ctx: ScenarioContext) => Promise<void>): void;
+  scenario: ScenarioApi;
   beforeEach(body: () => unknown | Promise<unknown>): void;
   afterEach(body: () => unknown | Promise<unknown>): void;
   readonly expect: Expect;
