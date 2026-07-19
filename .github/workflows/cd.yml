@@ -124,7 +124,9 @@ jobs:
             docker logout "$REGISTRY" || true
             # Ask compose which host port api:3000 actually maps to, rather than
             # assuming 3000 — the operator's .env may set API_PORT to anything.
-            api_port="$(docker compose -f docker-compose.prod.yml port api 3000 | cut -d: -f2)"
+            # Take the first mapping line and the segment after the last colon, so
+            # a dual-stack "[::]:PORT" line still yields just the port.
+            api_port="$(docker compose -f docker-compose.prod.yml port api 3000 | head -n1 | sed 's/.*://')"
             # Fail the deploy if the api never reports healthy (~60s budget).
             for i in $(seq 1 30); do
               if curl -fsS "http://127.0.0.1:${api_port}/health" | grep -q '"status":"ok"'; then
