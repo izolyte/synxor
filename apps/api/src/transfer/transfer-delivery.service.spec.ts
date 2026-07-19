@@ -24,6 +24,9 @@ class FakeDeliveryRepository implements DeliveryRepository {
   findByTransferId(): Promise<Delivery | null> {
     return Promise.resolve(null);
   }
+  findByTransferIds(): Promise<Delivery[]> {
+    return Promise.resolve([]);
+  }
 }
 
 describe('TransferDeliveryService', () => {

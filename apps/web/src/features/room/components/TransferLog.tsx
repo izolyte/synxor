@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { TransferRow, type TransferRowData } from "~/features/room/components/TransferRow";
 import {
@@ -52,7 +52,11 @@ export function TransferLog({
   // today, but don't let a stale index point past the end).
   const clampedActive = rows.length === 0 ? 0 : Math.min(activeIndex, rows.length - 1);
 
-  useEffect(() => {
+  // Runs before paint (no flash) and short-circuits unless a keyboard move armed
+  // pendingFocus. It stays unconditional on purpose: the virtualizer may need a
+  // follow-up commit to scroll the target row into range, and we retry each
+  // commit until it's in the DOM to focus.
+  useLayoutEffect(() => {
     const target = pendingFocus.current;
     if (target === null) return;
     const el = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${target}"]`);

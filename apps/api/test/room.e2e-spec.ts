@@ -214,6 +214,36 @@ describe('Room API (e2e)', () => {
       ]);
     });
 
+    it('reports delivered:false for a Transfer with no Delivery row yet', async () => {
+      rooms.stored.set('LOGE3E', {
+        id: 'room-log-2',
+        code: 'LOGE3E',
+        status: 'ACTIVE',
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+      });
+      const transfer = await transfers.create({
+        roomId: 'room-log-2',
+        payloadType: 'FILE',
+        contentLength: BigInt(1024),
+      });
+      await transfers.createFilePayload({
+        transferId: transfer.id,
+        fileName: 'draft.txt',
+        fileSizeBytes: BigInt(1024),
+        mimeType: 'text/plain',
+        storageKey: 'k2',
+      });
+
+      const res = await get('LOGE3E').expect(200);
+      const [item] = historyResult.parse(res.body).result.data;
+      expect(item.delivered).toBe(false);
+    });
+
+    it('maps a well-formed but unknown Room Code to NOT_FOUND', async () => {
+      await get('ZZZZZZ').expect(404);
+    });
+
     it('rejects a malformed Room Code with 400', async () => {
       await get('nope').expect(400);
     });

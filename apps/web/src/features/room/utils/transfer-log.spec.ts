@@ -94,6 +94,20 @@ suite("mergeTransferLog", () => {
     expect(rows[0].receivedAt).toBe(Date.parse("2026-01-01T10:00:00.000Z"));
   });
 
+  test("a delivered history row isn't downgraded by a lagging live progress event", () => {
+    // The delivered set hasn't caught up to the persisted delivery yet, so the
+    // live payload alone would read as in_progress — delivery must not regress.
+    const rows = mergeTransferLog({
+      history: [historyFile({ id: "same", delivered: true })],
+      transfers: [progress({ transferId: "same" })],
+      texts: [],
+      delivered: new Set<string>(),
+      liveTimestamps: new Map([["same", 999]]),
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("delivered");
+  });
+
   test("maps a text snippet to a copyable snippet row", () => {
     const rows = mergeTransferLog({
       history: [],

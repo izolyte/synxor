@@ -18,4 +18,9 @@ export class FakeDeliveryRepository implements DeliveryRepository {
   findByTransferId(transferId: string): Promise<Delivery | null> {
     return Promise.resolve(this.deliveries.get(transferId) ?? null);
   }
+
+  findByTransferIds(transferIds: string[]): Promise<Delivery[]> {
+    const ids = new Set(transferIds);
+    return Promise.resolve([...this.deliveries.values()].filter((d) => ids.has(d.transferId)));
+  }
 }

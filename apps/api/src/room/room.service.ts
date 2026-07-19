@@ -82,25 +82,30 @@ export class RoomService {
     if (!room) throw new RoomNotFoundError(roomCode);
 
     const transfers = await this.transfers.findByRoomId(room.id);
+    const transferIds = transfers.map((t) => t.id);
 
-    return Promise.all(
-      transfers.map(async (transfer) => {
-        const [filePayload, delivery] = await Promise.all([
-          this.transfers.findFilePayloadByTransferId(transfer.id),
-          this.deliveries.findByTransferId(transfer.id),
-        ]);
-        return {
-          id: transfer.id,
-          payloadType: transfer.payloadType,
-          fileName: filePayload?.fileName ?? null,
-          // bigint → number for the transformer-less JSON wire; file sizes stay
-          // well under Number.MAX_SAFE_INTEGER (the upload cap is far below it).
-          fileSizeBytes: filePayload ? Number(filePayload.fileSizeBytes) : null,
-          delivered: delivery !== null,
-          createdAt: transfer.createdAt.toISOString(),
-        };
-      }),
-    );
+    // Two batched reads instead of a round-trip pair per Transfer — the Log grows
+    // with the Room, so N+1 here scales with session length.
+    const [filePayloads, deliveries] = await Promise.all([
+      this.transfers.findFilePayloadsByTransferIds(transferIds),
+      this.deliveries.findByTransferIds(transferIds),
+    ]);
+    const filePayloadByTransferId = new Map(filePayloads.map((fp) => [fp.transferId, fp]));
+    const deliveredTransferIds = new Set(deliveries.map((d) => d.transferId));
+
+    return transfers.map((transfer) => {
+      const filePayload = filePayloadByTransferId.get(transfer.id) ?? null;
+      return {
+        id: transfer.id,
+        payloadType: transfer.payloadType,
+        fileName: filePayload?.fileName ?? null,
+        // bigint → number for the transformer-less JSON wire; file sizes stay
+        // well under Number.MAX_SAFE_INTEGER (the upload cap is far below it).
+        fileSizeBytes: filePayload ? Number(filePayload.fileSizeBytes) : null,
+        delivered: deliveredTransferIds.has(transfer.id),
+        createdAt: transfer.createdAt.toISOString(),
+      };
+    });
   }
 
   // Lets the DB's unique constraint on Room.code arbitrate collisions, rather

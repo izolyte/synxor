@@ -13,4 +13,7 @@ export interface TransferRepository {
   findByRoomId(roomId: string): Promise<Transfer[]>;
   createFilePayload(input: CreateFilePayloadInput): Promise<FilePayload>;
   findFilePayloadByTransferId(transferId: string): Promise<FilePayload | null>;
+  // Batched sibling of findFilePayloadByTransferId — one round-trip for a whole
+  // Room's history instead of one per Transfer.
+  findFilePayloadsByTransferIds(transferIds: string[]): Promise<FilePayload[]>;
 }

@@ -40,4 +40,9 @@ export class FakeTransferRepository implements TransferRepository {
   findFilePayloadByTransferId(transferId: string): Promise<FilePayload | null> {
     return Promise.resolve(this.filePayloads.get(transferId) ?? null);
   }
+
+  findFilePayloadsByTransferIds(transferIds: string[]): Promise<FilePayload[]> {
+    const ids = new Set(transferIds);
+    return Promise.resolve([...this.filePayloads.values()].filter((p) => ids.has(p.transferId)));
+  }
 }

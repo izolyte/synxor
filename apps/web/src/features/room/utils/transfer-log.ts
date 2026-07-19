@@ -114,9 +114,16 @@ export function mergeTransferLog({
 
   const overlay = (row: TransferLogRow) => {
     const existing = rows.get(row.id);
+    if (!existing) {
+      rows.set(row.id, row);
+      return;
+    }
     // A persisted row owns its timestamp; the live event only refreshes status,
-    // href, and payload fields on top of it.
-    rows.set(row.id, existing ? { ...row, receivedAt: existing.receivedAt } : row);
+    // href, and payload fields on top of it. But delivery is monotonic: once a
+    // row is delivered it never regresses to in_progress just because a stale
+    // live payload trails the delivered set.
+    const status = existing.status === "delivered" ? "delivered" : row.status;
+    rows.set(row.id, { ...row, receivedAt: existing.receivedAt, status });
   };
 
   for (const payload of transfers) {
