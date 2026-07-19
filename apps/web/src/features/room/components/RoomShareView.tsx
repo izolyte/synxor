@@ -13,6 +13,7 @@ import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
 import { TransferLog } from "~/features/room/components/TransferLog";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket, type SocketFactory } from "~/features/room/hooks/useRoomSocket";
+import type { Uploader } from "~/features/room/hooks/useFileUploads";
 import { useTransferLogRows } from "~/features/room/hooks/useTransferLog";
 import { useClipboard } from "~/features/room/hooks/useClipboard";
 import type { RoomRole } from "~/features/room/services/room-session.service";
@@ -37,6 +38,7 @@ export function RoomShareView({
   token,
   role = "sender",
   socketFactory,
+  uploader,
   transferHistory = [],
 }: {
   roomCode: string;
@@ -44,6 +46,8 @@ export function RoomShareView({
   token?: string;
   role?: RoomRole;
   socketFactory?: SocketFactory;
+  /** Test seam forwarded to DropZone; production uses the real chunked uploader. */
+  uploader?: Uploader;
   /** Persisted Transfer history for the Log, fetched by the route (RoomPage). */
   transferHistory?: TransferHistory;
 }) {
@@ -63,9 +67,12 @@ export function RoomShareView({
   // Same origin the socket rides; only resolved with a live token (client-only).
   const apiOrigin = socketToken ? resolveApiOrigin(import.meta.env) : undefined;
 
-  // `transfers` is the whole-Room feed (every participant's progress off the
-  // socket), so this holds for a Sender's upload and a Receiver's download alike.
-  const transferActive = transfers.some((t) => !t.complete);
+  // `transfers` is the whole-Room socket feed, which covers a Receiver's download
+  // but NOT a Sender's own upload until the server echoes its first progress
+  // broadcast — so fold in DropZone's local upload state, or a file dropped in
+  // the last RTT before expiry could seal the Room mid-upload.
+  const [senderUploading, setSenderUploading] = useState(false);
+  const transferActive = transfers.some((t) => !t.complete) || senderUploading;
   useEffect(() => {
     if (expired && !transferActive) setSealed(true);
   }, [expired, transferActive]);
@@ -131,7 +138,13 @@ export function RoomShareView({
 
       {role === "sender" ? (
         <div className="flex flex-col gap-3">
-          <DropZone token={socketToken} apiOrigin={apiOrigin} delivered={delivered} />
+          <DropZone
+            token={socketToken}
+            apiOrigin={apiOrigin}
+            delivered={delivered}
+            uploader={uploader}
+            onActiveChange={setSenderUploading}
+          />
           <TextPasteField onSend={sendText} />
         </div>
       ) : (

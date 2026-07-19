@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { screen as rtlScreen } from "@testing-library/react";
+import { act, fireEvent, screen as rtlScreen } from "@testing-library/react";
 import {
   RouterProvider,
   createMemoryHistory,
@@ -15,6 +15,7 @@ import { selectors } from "~test/app";
 import { DAY, HOUR, MINUTE } from "~/shared/constants/time";
 import { RoomShareView } from "~/features/room/components/RoomShareView";
 import { TransferEvent, type TransferProgressPayload } from "~/features/room/constants/transfer";
+import type { Uploader } from "~/features/room/hooks/useFileUploads";
 
 type Handler = (payload?: unknown) => void;
 
@@ -168,6 +169,63 @@ suite("RoomShareView", () => {
       .find({ text: "This Room has expired. Create a new Room to send files." })
       .shouldBeVisible();
     await screen.find({ testId: "drop-zone" }).shouldNotExist();
+  });
+
+  test("holds an expired Room open while the Sender's own upload is still in flight", async () => {
+    // The upload has started locally but the server hasn't broadcast its first
+    // progress yet, so the socket `transfers` feed is still empty. The sealing
+    // window must key off DropZone's local upload state, or the Room would seal
+    // and unmount the upload it was meant to protect.
+    const socket = new FakeSocket();
+    // Parks each upload so it stays in the "uploading" phase until we release it.
+    const pending: Array<() => void> = [];
+    const uploader: Uploader = () =>
+      new Promise((resolve) =>
+        pending.push(() =>
+          resolve({ transferId: "t1", receivedChunks: 1, totalChunks: 1, complete: true }),
+        ),
+      );
+
+    function Uploading() {
+      const [expiresAt, setExpiresAt] = useState(new Date(Date.now() + HOUR).toISOString());
+      const factory = useMemo(() => () => socket as unknown as Socket, []);
+      return (
+        <>
+          <button onClick={() => setExpiresAt(new Date(Date.now() - 1000).toISOString())}>
+            run-out
+          </button>
+          <button onClick={() => socket.emit("connect")}>connect</button>
+          <RoomShareView
+            roomCode="ABC123"
+            expiresAt={expiresAt}
+            token="tok"
+            role="sender"
+            socketFactory={factory}
+            uploader={uploader}
+          />
+        </>
+      );
+    }
+
+    const screen = await renderRouted(Uploading);
+    await screen.find({ role: "button", name: "connect" }).click();
+
+    // Start a local upload; deliberately emit no socket progress event.
+    fireEvent.change(rtlScreen.getByTestId("drop-zone-input"), {
+      target: { files: [new File(["x"], "a.txt", { type: "text/plain" })] },
+    });
+    await screen.find({ text: "a.txt" }).shouldBeVisible();
+
+    // TTL runs out with only the local upload in flight: the Room must hold, not
+    // seal and unmount the Drop Zone.
+    await screen.find({ role: "button", name: "run-out" }).click();
+    await screen.find({ testId: "drop-zone" }).shouldBeVisible();
+
+    // Upload finishes → nothing left in flight → the Room seals.
+    await act(async () => pending[0]());
+    await screen
+      .find({ text: "This Room has expired. Create a new Room to send files." })
+      .shouldBeVisible();
   });
 
   test("surfaces a lost connection with a refresh prompt when reconnect fails", async () => {
