@@ -140,7 +140,9 @@ jobs:
           # Drive the app through the nginx ingress over its self-signed TLS —
           # the same path production serves.
           E2E_BASE_URL: https://localhost
-          # E2E_STACK: "1"  # ← flip on to gate the full transfer flow live
+          # Gate the full transfer flow (create → upload → join → download →
+          # delivery) against the live stack, not just the render scenarios.
+          E2E_STACK: "1"
         run: pnpm --filter web test:e2e
       - name: Dump stack logs on failure
         if: failure()
