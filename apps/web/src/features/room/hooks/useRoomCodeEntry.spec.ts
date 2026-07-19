@@ -24,6 +24,21 @@ suite("useRoomCodeEntry", () => {
     expect(onJoin.calls[0][0]).toBe("ABC123");
   });
 
+  test("auto-submits a complete prefilled code once (shared-link join)", () => {
+    const onJoin = fn<[string], void>();
+    renderHook(() => useRoomCodeEntry({ ...base, onJoin, initialCode: "ab-c123" }));
+
+    expect(onJoin.calls.length).toBe(1);
+    expect(onJoin.calls[0][0]).toBe("ABC123");
+  });
+
+  test("does not auto-submit an incomplete prefilled code", () => {
+    const onJoin = fn();
+    renderHook(() => useRoomCodeEntry({ ...base, onJoin, initialCode: "AB" }));
+
+    expect(onJoin.calls.length).toBe(0);
+  });
+
   test("does not submit while incomplete", () => {
     const onJoin = fn();
     const { current } = renderHook(() => useRoomCodeEntry({ ...base, onJoin, initialCode: "AB" }));

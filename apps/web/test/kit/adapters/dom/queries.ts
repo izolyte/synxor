@@ -30,7 +30,7 @@ function findOne(q: Bound, selector: Selector): Promise<HTMLElement> {
   if ("role" in selector) {
     return q.findByRole(
       selector.role,
-      selector.name ? { name: selector.name } : undefined,
+      selector.name ? { name: selector.name, exact: selector.exact } : undefined,
     );
   }
   if ("label" in selector) return q.findByLabelText(selector.label);
@@ -42,7 +42,7 @@ function queryOne(q: Bound, selector: Selector): HTMLElement | null {
   if ("role" in selector) {
     return q.queryByRole(
       selector.role,
-      selector.name ? { name: selector.name } : undefined,
+      selector.name ? { name: selector.name, exact: selector.exact } : undefined,
     );
   }
   if ("label" in selector) return q.queryByLabelText(selector.label);

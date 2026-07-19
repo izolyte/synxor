@@ -140,8 +140,19 @@ jobs:
           # Drive the app through the nginx ingress over its self-signed TLS —
           # the same path production serves.
           E2E_BASE_URL: https://localhost
-          # E2E_STACK: "1"  # ← flip on to gate the full transfer flow live
+          # Gate the full transfer flow (create → upload → join → download →
+          # delivery) against the live stack, not just the render scenarios.
+          E2E_STACK: "1"
         run: pnpm --filter web test:e2e
+      # On failure, dump each Playwright error-context (the aria snapshot of the
+      # page when the assertion failed) into the log — the fastest way to see what
+      # actually rendered without pulling the trace artifact.
+      - name: Show Playwright error context
+        if: failure()
+        run: |
+          for f in apps/web/test-results/*/error-context.md; do
+            echo "===== $f ====="; cat "$f" 2>/dev/null || true
+          done
       - name: Dump stack logs on failure
         if: failure()
         run: docker compose logs --no-color

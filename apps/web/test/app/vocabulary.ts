@@ -122,8 +122,14 @@ export const selectors = {
     compose: { label: copy.transfer.compose.label } as const satisfies ActionableSelector,
     send: { role: "button", name: copy.transfer.compose.send } as const satisfies ActionableSelector,
     // The incoming file's Download is an anchor (role "link"), the snippet Copy a
-    // button — each named by the affordance the Receiver reaches for.
-    download: { role: "link", name: copy.transfer.download } as const satisfies ActionableSelector,
+    // button — each named by the affordance the Receiver reaches for. `exact` so
+    // the plain "Download" doesn't also match the Transfer Log row's "Download
+    // <file>" link.
+    download: {
+      role: "link",
+      name: copy.transfer.download,
+      exact: true,
+    } as const satisfies ActionableSelector,
     copySnippet: {
       role: "button",
       name: copy.transfer.copySnippet,
@@ -135,6 +141,9 @@ export const selectors = {
     // A snippet/link the Receiver received, matched by the content that was sent.
     incomingText: (content: string) =>
       ({ text: content }) as const satisfies ReadonlySelector,
+    // The shared Transfer Log region — scope to it when a status (Delivered) also
+    // appears on a live row, so the assertion targets exactly one element.
+    log: { role: "region", name: "Transfer Log" } as const satisfies ActionableSelector,
   },
 };
 
