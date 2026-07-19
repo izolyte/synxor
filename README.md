@@ -80,9 +80,13 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 1. Repo **variable** `DEPLOY_ENABLED=true` and `VITE_API_URL` set to your public origin (baked into the web bundle).
 2. Repo **secrets** `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`.
 
-On merge it SCPs `deploy/docker-compose.prod.yml` to the host, pulls the commit's images, restarts the stack, and health-checks the api.
+On merge it SCPs `deploy/docker-compose.prod.yml` and `nginx/templates/` to the host, pulls the commit's images, brings the stack up with `--wait`, and fails unless the nginx ingress actually serves.
 
-> **Heads-up.** The production compose (`deploy/`) currently publishes api/web on host ports and does **not** terminate TLS in-stack — put your own TLS/reverse-proxy in front (a cloud load balancer, Caddy, or the bundled `nginx/` config). Bringing the dev nginx topology to production is tracked in [#82](https://github.com/izolyte/synxor/issues/82). Note also that the nginx-fronted stack does not currently come up cleanly ([#81](https://github.com/izolyte/synxor/issues/81)) — resolve that before a real deploy.
+Production uses the same nginx-fronted topology as dev — nginx terminates TLS on 80/443, api and web stay internal. On the host, next to the compose file:
+
+- **`nginx/certs/`** — real certificates (Let's Encrypt or your CA); point `TLS_CERT_PATH` / `TLS_KEY_PATH` at them. The deploy fails fast if this is empty.
+- **`.env`** — `VITE_API_URL` here **must equal** the repo `VITE_API_URL` variable the web bundle was built with (both are the one public origin, e.g. `https://files.example.com`); a mismatch breaks the HTTP→HTTPS redirect. Also set `ALLOWED_ORIGINS` and `WS_ALLOWED_ORIGINS` to that origin.
+- **MinIO console** — published on loopback only; reach it over an SSH tunnel.
 
 ## Development
 

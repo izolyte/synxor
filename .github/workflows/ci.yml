@@ -80,6 +80,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
 
+  prod-compose:
+    name: prod compose — validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Parse + interpolate the production topology from .env (the checked-in
+      # example is CI-safe) so structural / interpolation regressions surface
+      # without pulling images or standing the stack up.
+      - run: cp .env.example .env
+      - run: docker compose -f deploy/docker-compose.prod.yml config --quiet
+
   # Playwright against the full Docker Compose stack (web + api + Postgres + MinIO
   # + Redis). Heavy, so it's opt-in for now: pushes to main, manual dispatch, or a
   # PR labelled `e2e`. The full-transfer journey ships pending (skipped) until #20
