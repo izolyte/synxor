@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ROOM_REPOSITORY, type RoomRepository } from '../domain/room/room.repository';
 import {
+  RoomClosedError,
   RoomCodeCollisionError,
   RoomCodeExhaustionError,
   RoomExpiredError,
@@ -16,6 +17,7 @@ import {
   DELIVERY_REPOSITORY,
   type DeliveryRepository,
 } from '../domain/delivery/delivery.repository';
+import { OBJECT_STORAGE, type ObjectStorage } from '../domain/storage/object-storage';
 import type { CreateRoomResult } from './dto/create-room.dto';
 import type { JoinRoomResult } from './dto/join-room.dto';
 import type { RoomTransfersResult } from './dto/room-transfers.dto';
@@ -34,6 +36,7 @@ export class RoomService {
     @Inject(TOKEN_ISSUER) private readonly tokenIssuer: TokenIssuer,
     @Inject(TRANSFER_REPOSITORY) private readonly transfers: TransferRepository,
     @Inject(DELIVERY_REPOSITORY) private readonly deliveries: DeliveryRepository,
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
   ) {}
 
   async create(expiry: Expiry): Promise<CreateRoomResult> {
@@ -63,6 +66,9 @@ export class RoomService {
   async join(roomCode: string): Promise<JoinRoomResult> {
     const room = await this.rooms.findByCode(roomCode);
     if (!room) throw new RoomNotFoundError(roomCode);
+    // A deliberately-closed Room reads differently from a lapsed one — check it
+    // before isExpired(), which folds every non-ACTIVE status into "expired".
+    if (room.status === 'CLOSED') throw new RoomClosedError(roomCode);
     if (isExpired(room)) throw new RoomExpiredError(roomCode);
 
     const roomToken = this.tokenIssuer.sign(
@@ -110,6 +116,26 @@ export class RoomService {
         createdAt: transfer.createdAt.toISOString(),
       };
     });
+  }
+
+  // Tear a Room down on demand: purge its Transfers (objects + rows), then flip
+  // it to CLOSED so it's no longer joinable (isExpired() treats any non-ACTIVE
+  // status as closed). Purge runs before the status flip, matching the sweeper's
+  // ordering — if it throws the Room stays ACTIVE and a retry is safe.
+  async close(roomId: string): Promise<void> {
+    await this.purgeRoomContents(roomId);
+    await this.rooms.updateStatus(roomId, 'CLOSED');
+  }
+
+  // Delete every Transfer belonging to a Room: its stored objects first, then the
+  // rows. Shared by on-demand close and the expiry sweeper. removeObject over an
+  // already-gone key is a harmless no-op, so a partial failure is retry-safe.
+  async purgeRoomContents(roomId: string): Promise<void> {
+    const storageKeys = await this.transfers.listStorageKeysByRoomId(roomId);
+    for (const key of storageKeys) {
+      await this.storage.removeObject(key);
+    }
+    await this.transfers.deleteByRoomId(roomId);
   }
 
   // Lets the DB's unique constraint on Room.code arbitrate collisions, rather

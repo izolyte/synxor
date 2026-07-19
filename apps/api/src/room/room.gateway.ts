@@ -24,7 +24,8 @@ import {
 } from '../transfer/transfer-events';
 import { hashRoomToken } from '../infrastructure/security/token-hash';
 import { RoomPresenceService } from './room-presence.service';
-import { RoomEvent } from './room-events';
+import { RoomService } from './room.service';
+import { RoomEvent, type RoomCloseAck } from './room-events';
 import type { RoomBroadcaster } from './room-broadcaster';
 
 interface ConnectedParticipant {
@@ -46,6 +47,7 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
     @Inject(TOKEN_VERIFIER) private readonly tokenVerifier: TokenVerifier,
     @Inject(TRANSFER_REPOSITORY) private readonly transfers: TransferRepository,
     private readonly presence: RoomPresenceService,
+    private readonly roomService: RoomService,
   ) {}
 
   emitToRoom(roomId: string, event: string, payload: unknown): void {
@@ -100,6 +102,31 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
       contentLength: BigInt(Buffer.byteLength(content, 'utf8')),
     });
     return transfer.id;
+  }
+
+  // The Sender ends the Room: purge its Transfers, mark it CLOSED, then evict
+  // everyone. The `room:closed` event goes out before the disconnect so each
+  // Participant can show a terminal state instead of a bare "connection lost".
+  @SubscribeMessage(RoomEvent.Close)
+  async handleCloseRoom(@ConnectedSocket() socket: Socket): Promise<RoomCloseAck> {
+    const info = this.connected.get(socket.id);
+    if (!info || info.role !== 'SENDER') {
+      return { error: 'Only the Sender may close the Room' };
+    }
+    try {
+      await this.roomService.close(info.roomId);
+    } catch (err) {
+      this.logger.error(`Failed to close Room ${info.roomId}`, err);
+      return { error: 'Could not close the Room — try again' };
+    }
+    // Notify and evict every *other* Participant. The initiating Sender is left
+    // connected so this ack still reaches it — its client disconnects as it
+    // navigates away. `socket.to` scopes both the event and the kick to the rest
+    // of the Room.
+    socket.to(info.roomId).emit(RoomEvent.Closed, {});
+    const others = await socket.to(info.roomId).fetchSockets();
+    for (const other of others) other.disconnect(true);
+    return { ok: true };
   }
 
   async handleConnection(socket: Socket): Promise<void> {

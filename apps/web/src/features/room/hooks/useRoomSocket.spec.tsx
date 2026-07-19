@@ -32,8 +32,12 @@ class FakeManager {
 class FakeSocket {
   private readonly handlers = new Map<string, Handler>();
   readonly io = new FakeManager();
+  // Mirrors socket.io's connection flag; closeRoom refuses to emit without it.
+  connected = true;
   // Outgoing emits the hook makes (e.g. sendText), so a test can assert them.
   readonly sent: Array<{ event: string; payload?: unknown }> = [];
+  // The ack an emit-with-callback (closeRoom) resolves to; tests override it.
+  nextAck: unknown = { ok: true };
   on(event: string, cb: Handler): this {
     this.handlers.set(event, cb);
     return this;
@@ -47,6 +51,12 @@ class FakeSocket {
   }
   emit(event: string, payload?: unknown): void {
     this.sent.push({ event, payload });
+    // socket.io calls a trailing callback with the server ack; mirror that so
+    // closeRoom resolves.
+    if (typeof payload === "function") {
+      (payload as (ack: unknown) => void)(this.nextAck);
+      return;
+    }
     this.handlers.get(event)?.(payload);
   }
 }
@@ -71,14 +81,15 @@ function Harness({
 }) {
   // Local so a button can swap the token mid-test (a rejoin gets a new one).
   const [token, setToken] = useState(initialToken);
+  const [closeResult, setCloseResult] = useState("pending");
   const factory = useMemo(() => () => socket as unknown as Socket, [socket]);
-  const { status, receiverCount, transfers, texts, delivered, sendText } = useRoomSocket(
-    token,
-    factory,
-  );
+  const { status, receiverCount, transfers, texts, delivered, closed, sendText, closeRoom } =
+    useRoomSocket(token, factory);
   return (
     <>
       <output data-testid="status">{status}</output>
+      <output data-testid="closed">{String(closed)}</output>
+      <output data-testid="close-result">{closeResult}</output>
       <output data-testid="count">{receiverCount}</output>
       <output data-testid="transfers">
         {/* "none" over an empty string: jest-dom rejects toHaveTextContent(""). */}
@@ -126,6 +137,8 @@ function Harness({
         deliver-malformed
       </button>
       <button onClick={() => setToken("tok-2")}>retoken</button>
+      <button onClick={() => socket.emit(RoomEvent.Closed)}>recv-closed</button>
+      <button onClick={async () => setCloseResult(JSON.stringify(await closeRoom()))}>close</button>
     </>
   );
 }
@@ -282,5 +295,43 @@ suite("useRoomSocket", () => {
       event: "transfer:text:send",
       payload: { text: "hello world" },
     });
+  });
+
+  test("room:closed latches the socket closed", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+    await screen.find({ testId: "closed" }).shouldHaveText("false");
+
+    await screen.find({ role: "button", name: "recv-closed" }).click();
+    await screen.find({ testId: "closed" }).shouldHaveText("true");
+  });
+
+  test("closeRoom emits room:close and resolves with the server ack", async () => {
+    const socket = new FakeSocket();
+    const screen = renderComponent(<Harness token="tok" socket={socket} />);
+
+    await screen.find({ role: "button", name: "close" }).click();
+
+    expect(socket.sent.some((s) => s.event === "room:close")).toBe(true);
+    await screen.find({ testId: "close-result" }).shouldHaveText('{"ok":true}');
+  });
+
+  test("closeRoom resolves an error when there is no live socket", async () => {
+    // No token → the hook never opens a socket, so closeRoom can't reach a server.
+    const screen = renderComponent(<Harness token={undefined} socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "close" }).click();
+    await screen.find({ testId: "close-result" }).shouldHaveText('{"error":"No connection"}');
+  });
+
+  test("closeRoom fails fast instead of hanging on a disconnected socket", async () => {
+    // A socket exists but isn't connected (dropped / lost): the emit would buffer
+    // and its ack never fire, so closeRoom must resolve an error, not hang.
+    const socket = new FakeSocket();
+    socket.connected = false;
+    const screen = renderComponent(<Harness token="tok" socket={socket} />);
+
+    await screen.find({ role: "button", name: "close" }).click();
+    await screen.find({ testId: "close-result" }).shouldHaveText('{"error":"No connection"}');
+    expect(socket.sent.some((s) => s.event === "room:close")).toBe(false);
   });
 });

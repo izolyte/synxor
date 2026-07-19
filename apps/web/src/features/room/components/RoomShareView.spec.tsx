@@ -15,6 +15,7 @@ import { selectors } from "~test/app";
 import { DAY, HOUR, MINUTE } from "~/shared/constants/time";
 import { RoomShareView } from "~/features/room/components/RoomShareView";
 import { TransferEvent, type TransferProgressPayload } from "~/features/room/constants/transfer";
+import { RoomEvent } from "~/features/room/constants/room-events";
 import type { Uploader } from "~/features/room/hooks/useFileUploads";
 
 type Handler = (payload?: unknown) => void;
@@ -39,6 +40,8 @@ class FakeManager {
 class FakeSocket {
   private readonly handlers = new Map<string, Handler>();
   readonly io = new FakeManager();
+  connected = true;
+  readonly sent: string[] = [];
   on(event: string, cb: Handler): this {
     this.handlers.set(event, cb);
     return this;
@@ -51,6 +54,12 @@ class FakeSocket {
     return this;
   }
   emit(event: string, payload?: unknown): void {
+    this.sent.push(event);
+    // A trailing callback is a request for the server ack (closeRoom); resolve ok.
+    if (typeof payload === "function") {
+      (payload as (ack: unknown) => void)({ ok: true });
+      return;
+    }
     this.handlers.get(event)?.(payload);
   }
 }
@@ -253,5 +262,60 @@ suite("RoomShareView", () => {
     expect(rtlScreen.getByRole("alert")).toBeVisible();
     // The stale presence line yields to the alert.
     await screen.find(selectors.room.waiting).shouldNotExist();
+  });
+
+  test("a Sender can delete the Room, emitting the close over the socket", async () => {
+    const socket = new FakeSocket();
+    const factory = () => socket as unknown as Socket;
+    const screen = await renderRouted(() => (
+      <RoomShareView
+        roomCode="ABC123"
+        expiresAt={undefined}
+        token="tok"
+        role="sender"
+        socketFactory={factory}
+      />
+    ));
+
+    // First click only arms the confirm — nothing is sent yet.
+    await screen.find(selectors.room.deleteRoom).click();
+    await screen.find(selectors.room.confirmDelete).shouldBeVisible();
+    expect(socket.sent).not.toContain("room:close");
+
+    await screen.find(selectors.room.confirmDelete).click();
+    expect(socket.sent).toContain("room:close");
+  });
+
+  test("a Receiver sees a closed notice when the Sender closes the Room", async () => {
+    const socket = new FakeSocket();
+    const factory = () => socket as unknown as Socket;
+    const screen = await renderRouted(() => (
+      <>
+        <button onClick={() => socket.emit("connect")}>connect</button>
+        <button onClick={() => socket.emit(RoomEvent.Closed)}>closed</button>
+        <RoomShareView
+          roomCode="ABC123"
+          expiresAt={undefined}
+          token="tok"
+          role="receiver"
+          socketFactory={factory}
+        />
+      </>
+    ));
+
+    await screen.find({ role: "button", name: "connect" }).click();
+    await screen.find({ role: "button", name: "closed" }).click();
+
+    await screen.find(selectors.room.heading("closed")).shouldBeVisible();
+    await screen
+      .find({ text: "The Sender closed this Room. Create a new Room to send files." })
+      .shouldBeVisible();
+  });
+
+  test("a Receiver has no Delete Room control", async () => {
+    const screen = renderComponent(
+      <RoomShareView roomCode="ABC123" expiresAt={undefined} role="receiver" />,
+    );
+    await screen.find(selectors.room.deleteRoom).shouldNotExist();
   });
 });

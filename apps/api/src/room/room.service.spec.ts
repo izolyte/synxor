@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { RoomService } from './room.service';
 import type { Expiry } from '../domain/room/room-expiry';
 import {
+  RoomClosedError,
   RoomCodeExhaustionError,
   RoomExpiredError,
   RoomNotFoundError,
@@ -10,7 +11,8 @@ import { ROOM_CODE_MAX_ATTEMPTS, ROOM_CODE_PATTERN } from '../domain/room/room-c
 import { InMemoryRoomRepository } from '../domain/room/room.repository.fake';
 import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
 import { FakeDeliveryRepository } from '../domain/delivery/delivery.repository.fake';
-import type { Room, RoomStatus } from '../domain/room/room.entity';
+import { FakeObjectStorage } from '../domain/storage/object-storage.fake';
+import type { Room } from '../domain/room/room.entity';
 import type { CodeGenerator } from '../domain/security/code-generator';
 import { TokenRole, type TokenClaims, type TokenIssuer } from '../domain/security/token-issuer';
 import { DAY_MS, HOUR_MS } from '../common/time';
@@ -57,8 +59,9 @@ function setup(codes: string[], overrides: { existingCodes?: string[] } = {}) {
   const tokenIssuer = new FakeTokenIssuer();
   const transfers = new FakeTransferRepository();
   const deliveries = new FakeDeliveryRepository();
-  const service = new RoomService(repo, codeGen, tokenIssuer, transfers, deliveries);
-  return { service, repo, codeGen, tokenIssuer, transfers, deliveries };
+  const storage = new FakeObjectStorage();
+  const service = new RoomService(repo, codeGen, tokenIssuer, transfers, deliveries, storage);
+  return { service, repo, codeGen, tokenIssuer, transfers, deliveries, storage };
 }
 
 describe('RoomService.create', () => {
@@ -206,14 +209,21 @@ describe('RoomService.join', () => {
     await expect(service.join('GONE01')).rejects.toThrow(RoomExpiredError);
   });
 
-  it.each<RoomStatus>(['EXPIRED', 'CLOSED'])(
-    'throws RoomExpiredError when the Room status is %s',
-    async (status) => {
-      const { service, repo } = setup([]);
-      seedRoom(repo, { code: 'SHUT01', status, expiresAt: new Date(Date.now() + HOUR_MS) });
-      await expect(service.join('SHUT01')).rejects.toThrow(RoomExpiredError);
-    },
-  );
+  it('throws RoomExpiredError when the Room status is EXPIRED', async () => {
+    const { service, repo } = setup([]);
+    seedRoom(repo, {
+      code: 'SHUT01',
+      status: 'EXPIRED',
+      expiresAt: new Date(Date.now() + HOUR_MS),
+    });
+    await expect(service.join('SHUT01')).rejects.toThrow(RoomExpiredError);
+  });
+
+  it('throws RoomClosedError when the Room was deliberately closed', async () => {
+    const { service, repo } = setup([]);
+    seedRoom(repo, { code: 'SHUT02', status: 'CLOSED', expiresAt: new Date(Date.now() + HOUR_MS) });
+    await expect(service.join('SHUT02')).rejects.toThrow(RoomClosedError);
+  });
 
   it('does not issue a token when the Room is expired', async () => {
     const { service, repo, tokenIssuer } = setup([]);
@@ -314,5 +324,59 @@ describe('RoomService.transfers', () => {
     const items = await service.listTransfers('MINE01');
     expect(items).toHaveLength(1);
     expect(items[0].id).toBeDefined();
+  });
+});
+
+describe('RoomService.close', () => {
+  it('purges every Transfer (objects + rows) and flips the Room to CLOSED', async () => {
+    const { service, repo, transfers, storage } = setup([]);
+    const room = seedRoom(repo, { code: 'CLOS01' });
+
+    const file = await transfers.create({
+      roomId: room.id,
+      payloadType: 'FILE',
+      contentLength: BigInt(3),
+    });
+    await transfers.createFilePayload({
+      transferId: file.id,
+      fileName: 'a.bin',
+      fileSizeBytes: BigInt(3),
+      mimeType: 'application/octet-stream',
+      storageKey: 'key-close-1',
+    });
+    storage.objects.set('key-close-1', Buffer.from('abc'));
+    const text = await transfers.create({
+      roomId: room.id,
+      payloadType: 'LINK',
+      contentLength: BigInt(11),
+    });
+    await transfers.createTextPayload({ transferId: text.id, content: 'https://x.y' });
+
+    await service.close(room.id);
+
+    expect(storage.objects.has('key-close-1')).toBe(false);
+    expect(await transfers.findByRoomId(room.id)).toEqual([]);
+    expect(repo.stored.get('CLOS01')?.status).toBe('CLOSED');
+  });
+
+  it('leaves the Room ACTIVE when purging its objects fails', async () => {
+    const { service, repo, transfers, storage } = setup([]);
+    const room = seedRoom(repo, { code: 'CLOS02' });
+    const file = await transfers.create({
+      roomId: room.id,
+      payloadType: 'FILE',
+      contentLength: BigInt(1),
+    });
+    await transfers.createFilePayload({
+      transferId: file.id,
+      fileName: 'a.bin',
+      fileSizeBytes: BigInt(1),
+      mimeType: 'application/octet-stream',
+      storageKey: 'key-close-2',
+    });
+    jest.spyOn(storage, 'removeObject').mockRejectedValueOnce(new Error('storage down'));
+
+    await expect(service.close(room.id)).rejects.toThrow('storage down');
+    expect(repo.stored.get('CLOS02')?.status).toBe('ACTIVE');
   });
 });

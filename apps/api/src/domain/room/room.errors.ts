@@ -29,3 +29,9 @@ export class RoomExpiredError extends DomainError {
     super(`Room is no longer available: ${code}`);
   }
 }
+
+export class RoomClosedError extends DomainError {
+  constructor(code: string) {
+    super(`Room has been closed: ${code}`);
+  }
+}

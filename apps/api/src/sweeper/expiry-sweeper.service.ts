@@ -13,6 +13,7 @@ import {
   type UploadSessionStore,
 } from '../domain/transfer/upload-session';
 import { chunkObjectKey, fileObjectKey } from '../domain/transfer/storage-key';
+import { RoomService } from '../room/room.service';
 
 // How often the sweep runs. A minute is well inside the resolution anyone cares
 // about for a room that expires in hours, and keeps an abandoned upload from
@@ -38,6 +39,7 @@ export class ExpirySweeperService {
     @Inject(TRANSFER_REPOSITORY) private readonly transfers: TransferRepository,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(UPLOAD_SESSION_STORE) private readonly sessions: UploadSessionStore,
+    private readonly roomService: RoomService,
   ) {}
 
   @Interval(SWEEP_INTERVAL_MS)
@@ -73,15 +75,11 @@ export class ExpirySweeperService {
   }
 
   private async expireRoom(roomId: string): Promise<void> {
-    // Purge storage, then the rows, then flip the status last. If any step
-    // throws, the Room stays ACTIVE-but-past-expiry and the next sweep retries
-    // it — isExpired() keeps it unjoinable in the gap, and removeObject over an
-    // already-deleted key is a harmless no-op, so the retry is safe.
-    const storageKeys = await this.transfers.listStorageKeysByRoomId(roomId);
-    for (const key of storageKeys) {
-      await this.storage.removeObject(key);
-    }
-    await this.transfers.deleteByRoomId(roomId);
+    // Purge storage + rows, then flip the status last. If any step throws, the
+    // Room stays ACTIVE-but-past-expiry and the next sweep retries it —
+    // isExpired() keeps it unjoinable in the gap, and the purge is retry-safe.
+    // Same purge the on-demand close path uses, so both stay in lockstep.
+    await this.roomService.purgeRoomContents(roomId);
     await this.rooms.updateStatus(roomId, 'EXPIRED');
   }
 

@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { createRoomSocket } from "~/features/room/services/room-socket.service";
 import { resolveApiOrigin } from "~/shared/utils/api-origin";
-import { RoomEvent, type RoomPresencePayload } from "~/features/room/constants/room-events";
+import {
+  RoomEvent,
+  type RoomCloseAck,
+  type RoomPresencePayload,
+} from "~/features/room/constants/room-events";
 import {
   TransferEvent,
   type TransferDeliveredPayload,
@@ -24,11 +28,17 @@ export interface RoomSocketState {
   /** transferIds a Receiver has finished downloading. Drives the delivered
    *  states (Sender row, Receiver row) and the one-shot Delivery flash. */
   delivered: ReadonlySet<string>;
+  /** True once the server broadcasts room:closed — the Room was torn down and
+   *  this Participant is being kicked. Terminal: the UI shows a closed notice. */
+  closed: boolean;
 }
 
 export interface RoomSocket extends RoomSocketState {
   /** Sends a Text Snippet / Link to the Room; a no-op until the socket is live. */
   sendText: (text: string) => void;
+  /** Sender-only: closes the Room, kicking every Participant. Resolves with the
+   *  server's ack (or an error when there's no live socket). */
+  closeRoom: () => Promise<RoomCloseAck>;
 }
 
 const initialState: RoomSocketState = {
@@ -37,6 +47,7 @@ const initialState: RoomSocketState = {
   transfers: [],
   texts: [],
   delivered: new Set(),
+  closed: false,
 };
 
 // Default factory: the real socket. Tests pass a fake to drive events without a
@@ -45,6 +56,10 @@ export type SocketFactory = (token: string) => Socket;
 
 const defaultFactory: SocketFactory = (token) =>
   createRoomSocket(resolveApiOrigin(import.meta.env), token);
+
+// How long to wait for the server's close ack before giving up and surfacing an
+// error, so a dropped request never leaves the delete button spinning.
+const CLOSE_ACK_TIMEOUT_MS = 5000;
 
 /**
  * Subscribes to live Room activity — Receiver presence, file progress, and
@@ -113,6 +128,10 @@ export function useRoomSocket(
       });
     };
 
+    // The Sender closed the Room. Latch it terminal so the ensuing forced
+    // disconnect reads as "Room closed", not "Reconnecting…".
+    const onClosed = () => setState((prev) => ({ ...prev, closed: true }));
+
     const onDown = () => setState((prev) => ({ ...prev, status: "disconnected" }));
     // socket.io exhausted its reconnect budget — the Room won't recover on its own.
     // A later "connect" (manual refresh, network back) still flips it to connected.
@@ -129,6 +148,7 @@ export function useRoomSocket(
     socket.io?.on?.("reconnect_failed", onLost);
     socket.on(RoomEvent.Joined, onCount);
     socket.on(RoomEvent.Left, onCount);
+    socket.on(RoomEvent.Closed, onClosed);
     socket.on(TransferEvent.Progress, onProgress);
     socket.on(TransferEvent.Text, onText);
     socket.on(TransferEvent.Delivered, onDelivered);
@@ -145,5 +165,28 @@ export function useRoomSocket(
     socketRef.current?.emit(TransferEvent.SendText, { text });
   }, []);
 
-  return { ...state, sendText };
+  const closeRoom = useCallback((): Promise<RoomCloseAck> => {
+    const socket = socketRef.current;
+    // Require a *connected* socket: on a disconnected/lost one the emit just
+    // buffers and its ack never fires, leaving the caller (and the delete button)
+    // hanging forever. Fail fast so the UI can recover.
+    if (!socket || !socket.connected) return Promise.resolve({ error: "No connection" });
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (ack: RoomCloseAck) => {
+        if (settled) return;
+        settled = true;
+        resolve(ack);
+      };
+      // Backstop the ack: a server that drops mid-request must surface an error,
+      // not spin the button indefinitely.
+      const timer = setTimeout(() => finish({ error: "No response" }), CLOSE_ACK_TIMEOUT_MS);
+      socket.emit(RoomEvent.Close, (ack: RoomCloseAck) => {
+        clearTimeout(timer);
+        finish(ack ?? { error: "No response" });
+      });
+    });
+  }, []);
+
+  return { ...state, sendText, closeRoom };
 }
