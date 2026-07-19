@@ -106,29 +106,27 @@ jobs:
       - run: pnpm --filter web exec playwright install --with-deps chromium
       # Compose reads its config from .env; the checked-in example is CI-safe.
       - run: cp .env.example .env
-      # Build + start the stack WITHOUT --wait so the diagnostic below always runs.
-      - run: docker compose up -d --build
-      # TEMP diagnostic (#81): why does the web container's healthcheck fail?
-      - name: Diagnose web healthcheck
-        if: always()
+      # nginx terminates TLS, so it needs a cert — generate the dev self-signed pair.
+      - run: sh nginx/certs/generate-dev-cert.sh
+      # Build the images and bring the whole nginx-fronted stack up healthy.
+      - run: docker compose up -d --build --wait
+      # nginx has no healthcheck of its own, so confirm the ingress actually serves
+      # before Playwright's first navigation (self-signed cert → -k).
+      - name: Wait for the nginx ingress
         run: |
-          sleep 45
-          echo "===== docker compose ps ====="
-          docker compose ps
-          echo "===== web .State.Health ====="
-          docker inspect --format '{{json .State.Health}}' synxor-web-1 || true
-          echo "===== wget present in web image? ====="
-          docker exec synxor-web-1 sh -c 'command -v wget || echo NO_WGET' || true
-          echo "===== manual probe from inside web ====="
-          docker exec synxor-web-1 sh -c 'wget -qO- http://localhost:3000/healthz; echo " EXIT=$?"' || true
-          echo "===== web logs ====="
-          docker compose logs --no-color web | tail -30
+          for _ in $(seq 1 60); do
+            curl -fsk -o /dev/null https://localhost/healthz && exit 0
+            sleep 2
+          done
+          echo "nginx did not serve https://localhost within 120s" >&2
+          docker compose logs --no-color >&2 || true
+          exit 1
       - name: Run E2E scenarios
         env:
-          # Point Playwright at the composed web service (host-mapped :3001) and
-          # start no server of its own.
-          E2E_BASE_URL: http://localhost:3001
-          # E2E_STACK: "1"  # ← flip on once #20 makes the full transfer flow live
+          # Drive the app through the nginx ingress over its self-signed TLS —
+          # the same path production serves.
+          E2E_BASE_URL: https://localhost
+          # E2E_STACK: "1"  # ← flip on to gate the full transfer flow live
         run: pnpm --filter web test:e2e
       - name: Dump stack logs on failure
         if: failure()
