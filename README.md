@@ -100,7 +100,7 @@ No code changes needed.
 ## Releasing
 
 Releases are cut from `main` with [release-it](https://github.com/release-it/release-it). The
-version bump and `CHANGELOG.md` are derived from Conventional Commits (the same Angular preset
+version bump and `CHANGELOG.md` are derived from Conventional Commits (the same format
 commitlint enforces), so there's nothing to bump by hand — merge PRs with conventional titles and
 the history does the rest.
 
