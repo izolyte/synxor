@@ -32,10 +32,13 @@ function runScenario(body: (ctx: ScenarioContext) => Promise<void>) {
   }) => {
     const opened: BrowserContext[] = [];
     const openActor = async (): Promise<Driver> => {
-      // A hand-built context doesn't inherit the config's use.baseURL (only the
-      // page fixture does), so pass it through — else the actor's relative
-      // navigations have no base to resolve against.
-      const context = await browser.newContext({ baseURL });
+      // A hand-built context inherits none of the config's `use` options, so pass
+      // through both the baseURL (else relative navigations have no base) and the
+      // clipboard permission the Receiver's snippet copy needs.
+      const context = await browser.newContext({
+        baseURL,
+        permissions: ["clipboard-read", "clipboard-write"],
+      });
       opened.push(context);
       return createPlaywrightDriver(await context.newPage());
     };

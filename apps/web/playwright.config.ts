@@ -28,6 +28,9 @@ export default defineConfig({
     baseURL,
     // The external stack terminates TLS with a dev self-signed cert.
     ignoreHTTPSErrors: true,
+    // Snippet/link copy writes to the clipboard; grant it so the copy action
+    // doesn't stall on a permission prompt. (openActor grants it per-context too.)
+    permissions: ["clipboard-read", "clipboard-write"],
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
