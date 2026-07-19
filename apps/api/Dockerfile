@@ -26,6 +26,7 @@ RUN chown -R appuser:appgroup /app
 USER appuser
 ENV NODE_ENV=production
 EXPOSE 3000
+# 127.0.0.1 (IPv4) to match the container bind and dodge any localhost→::1 quirk.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:3000/health || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/health || exit 1
 CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node node_modules/prisma/build/index.js generate && exec node dist/main"]

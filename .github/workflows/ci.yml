@@ -106,26 +106,27 @@ jobs:
       - run: pnpm --filter web exec playwright install --with-deps chromium
       # Compose reads its config from .env; the checked-in example is CI-safe.
       - run: cp .env.example .env
-      # Build the images and start the stack; api gates web via its healthcheck.
+      # nginx terminates TLS, so it needs a cert — generate the dev self-signed pair.
+      - run: sh nginx/certs/generate-dev-cert.sh
+      # Build the images and bring the whole nginx-fronted stack up healthy.
       - run: docker compose up -d --build --wait
-      # `--wait` only gates on container health, and the web service has no
-      # healthcheck of its own — so poll the mapped port until the SSR process is
-      # actually serving before Playwright's first navigation hits it.
-      - name: Wait for web to be reachable
+      # nginx has no healthcheck of its own, so confirm the ingress actually serves
+      # before Playwright's first navigation (self-signed cert → -k).
+      - name: Wait for the nginx ingress
         run: |
           for _ in $(seq 1 60); do
-            curl -sf -o /dev/null http://localhost:3001 && exit 0
+            curl -fsk -o /dev/null https://localhost/healthz && exit 0
             sleep 2
           done
-          echo "web did not start serving on :3001 within 120s" >&2
-          docker compose logs --no-color web >&2 || true
+          echo "nginx did not serve https://localhost within 120s" >&2
+          docker compose logs --no-color >&2 || true
           exit 1
       - name: Run E2E scenarios
         env:
-          # Point Playwright at the composed web service (host-mapped :3001) and
-          # start no server of its own.
-          E2E_BASE_URL: http://localhost:3001
-          # E2E_STACK: "1"  # ← flip on once #20 makes the full transfer flow live
+          # Drive the app through the nginx ingress over its self-signed TLS —
+          # the same path production serves.
+          E2E_BASE_URL: https://localhost
+          # E2E_STACK: "1"  # ← flip on to gate the full transfer flow live
         run: pnpm --filter web test:e2e
       - name: Dump stack logs on failure
         if: failure()

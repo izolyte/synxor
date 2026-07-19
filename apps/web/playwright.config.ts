@@ -26,6 +26,8 @@ export default defineConfig({
     : "list",
   use: {
     baseURL,
+    // The external stack terminates TLS with a dev self-signed cert.
+    ignoreHTTPSErrors: true,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
