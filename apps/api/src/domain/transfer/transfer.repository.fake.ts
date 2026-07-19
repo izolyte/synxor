@@ -1,7 +1,10 @@
 import type {
   CreateFilePayloadInput,
+  CreateTextPayloadInput,
+  CreateTextTransferInput,
   CreateTransferInput,
   FilePayload,
+  TextPayload,
   Transfer,
 } from './transfer.entity';
 import type { TransferRepository } from './transfer.repository';
@@ -9,6 +12,7 @@ import type { TransferRepository } from './transfer.repository';
 export class FakeTransferRepository implements TransferRepository {
   readonly transfers = new Map<string, Transfer>();
   readonly filePayloads = new Map<string, FilePayload>();
+  readonly textPayloads = new Map<string, TextPayload>();
   private seq = 0;
 
   create(input: CreateTransferInput): Promise<Transfer> {
@@ -46,6 +50,34 @@ export class FakeTransferRepository implements TransferRepository {
     return Promise.resolve([...this.filePayloads.values()].filter((p) => ids.has(p.transferId)));
   }
 
+  createTextPayload(input: CreateTextPayloadInput): Promise<TextPayload> {
+    const payload: TextPayload = { id: `text-${++this.seq}`, ...input };
+    this.textPayloads.set(payload.transferId, payload);
+    return Promise.resolve(payload);
+  }
+
+  createTextTransfer(input: CreateTextTransferInput): Promise<Transfer> {
+    const transfer: Transfer = {
+      id: `transfer-${++this.seq}`,
+      roomId: input.roomId,
+      payloadType: input.payloadType,
+      contentLength: input.contentLength,
+      createdAt: new Date(),
+    };
+    this.transfers.set(transfer.id, transfer);
+    this.textPayloads.set(transfer.id, {
+      id: `text-${++this.seq}`,
+      transferId: transfer.id,
+      content: input.content,
+    });
+    return Promise.resolve(transfer);
+  }
+
+  findTextPayloadsByTransferIds(transferIds: string[]): Promise<TextPayload[]> {
+    const ids = new Set(transferIds);
+    return Promise.resolve([...this.textPayloads.values()].filter((p) => ids.has(p.transferId)));
+  }
+
   listStorageKeysByRoomId(roomId: string): Promise<string[]> {
     const keys = [...this.transfers.values()]
       .filter((t) => t.roomId === roomId)
@@ -57,6 +89,7 @@ export class FakeTransferRepository implements TransferRepository {
   deleteById(id: string): Promise<void> {
     this.transfers.delete(id);
     this.filePayloads.delete(id);
+    this.textPayloads.delete(id);
     return Promise.resolve();
   }
 
@@ -65,6 +98,7 @@ export class FakeTransferRepository implements TransferRepository {
       if (transfer.roomId === roomId) {
         this.transfers.delete(transfer.id);
         this.filePayloads.delete(transfer.id);
+        this.textPayloads.delete(transfer.id);
       }
     }
     return Promise.resolve();

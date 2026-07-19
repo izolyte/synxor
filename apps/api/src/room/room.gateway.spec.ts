@@ -10,6 +10,8 @@ import { PARTICIPANT_REPOSITORY } from '../domain/participant/participant.reposi
 import { TOKEN_VERIFIER } from '../domain/security/token-verifier';
 import { TokenRole, type TokenClaims } from '../domain/security/token-issuer';
 import { InMemoryParticipantRepository } from '../domain/participant/participant.repository.fake';
+import { TRANSFER_REPOSITORY } from '../domain/transfer/transfer.repository';
+import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
 
 // Controls what claims are returned per token string — no real JWT needed.
 class FakeTokenVerifier {
@@ -46,6 +48,7 @@ function waitForDisconnect(socket: Socket): Promise<string> {
 async function startApp(
   fakeVerifier: FakeTokenVerifier,
   fakeParticipants: InMemoryParticipantRepository,
+  fakeTransfers: FakeTransferRepository,
 ): Promise<{ app: INestApplication; port: number }> {
   const module = await Test.createTestingModule({
     providers: [
@@ -53,6 +56,7 @@ async function startApp(
       RoomPresenceService,
       { provide: TOKEN_VERIFIER, useValue: fakeVerifier },
       { provide: PARTICIPANT_REPOSITORY, useValue: fakeParticipants },
+      { provide: TRANSFER_REPOSITORY, useValue: fakeTransfers },
     ],
   }).compile();
 
@@ -68,12 +72,14 @@ describe('RoomGateway', () => {
   let port: number;
   let fakeVerifier: FakeTokenVerifier;
   let fakeParticipants: InMemoryParticipantRepository;
+  let fakeTransfers: FakeTransferRepository;
   const sockets: Socket[] = [];
 
   beforeEach(async () => {
     fakeVerifier = new FakeTokenVerifier();
     fakeParticipants = new InMemoryParticipantRepository();
-    ({ app, port } = await startApp(fakeVerifier, fakeParticipants));
+    fakeTransfers = new FakeTransferRepository();
+    ({ app, port } = await startApp(fakeVerifier, fakeParticipants, fakeTransfers));
   });
 
   afterEach(async () => {
@@ -277,7 +283,7 @@ describe('RoomGateway', () => {
     verifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
     verifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
 
-    const ctx = await startApp(verifier, new FailingRepo());
+    const ctx = await startApp(verifier, new FailingRepo(), new FakeTransferRepository());
     try {
       const sender = connect(ctx.port, 'sender-tok');
       sockets.push(sender);
@@ -348,6 +354,63 @@ describe('RoomGateway', () => {
       payloadType: 'TEXT_SNIPPET',
       content: 'just some notes',
     });
+  });
+
+  it('persists the Text transfer so it survives reload', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    const ack = (await sendText(sender, 'https://example.com/x')) as { transferId: string };
+
+    const transfer = await fakeTransfers.findById(ack.transferId);
+    expect(transfer).toMatchObject({ roomId: 'room-1', payloadType: 'LINK' });
+    const [text] = await fakeTransfers.findTextPayloadsByTransferIds([ack.transferId]);
+    expect(text).toMatchObject({ transferId: ack.transferId, content: 'https://example.com/x' });
+  });
+
+  it('does not persist or broadcast when a Receiver tries to send text', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    await sendText(receiver, 'https://example.com');
+
+    expect(await fakeTransfers.findByRoomId('room-1')).toHaveLength(0);
+  });
+
+  it('returns an error and persists nothing when the write fails', async () => {
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    jest
+      .spyOn(fakeTransfers, 'createTextTransfer')
+      .mockRejectedValueOnce(new Error('db unavailable'));
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const receiver = open('receiver-tok');
+    // Wait for the Receiver itself to be in the Room, not just the Sender's
+    // room:joined — otherwise "nothing was broadcast" could pass simply because
+    // the Receiver hadn't joined yet.
+    await waitFor(receiver, 'room:joined');
+
+    const gotText = waitFor(receiver, 'transfer:text');
+    const ack = (await sendText(sender, 'https://example.com')) as { error: string };
+
+    expect(ack.error).toMatch(/Could not send/);
+    // No broadcast to the Receiver, and no half-written orphan Transfer left behind.
+    await new Promise((r) => setTimeout(r, 50));
+    await expect(Promise.race([gotText, Promise.resolve('none')])).resolves.toBe('none');
+    expect(await fakeTransfers.findByRoomId('room-1')).toHaveLength(0);
   });
 
   it('does not echo the Text back to the Sender who sent it', async () => {

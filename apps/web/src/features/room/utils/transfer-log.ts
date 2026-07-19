@@ -23,7 +23,10 @@ function snippetPreview(content: string): string {
   return content.replace(/\s+/g, " ").trim();
 }
 
-function historyRow(item: TransferHistory[number], downloadHref?: DownloadHref): TransferLogRow {
+function historyRow(
+  item: TransferHistory[number],
+  downloadHref?: DownloadHref,
+): TransferLogRow | null {
   const receivedAt = Date.parse(item.createdAt);
   if (item.payloadType === "FILE") {
     const name = item.fileName ?? "File";
@@ -37,13 +40,22 @@ function historyRow(item: TransferHistory[number], downloadHref?: DownloadHref):
       receivedAt,
     };
   }
-  // Text/link Transfers aren't persisted today, but map them defensively so the
-  // history contract can grow without breaking the Log.
+  // A persisted Text Snippet / Link. `content` carries the body so a reload or
+  // late-join renders the same copy/open row the live socket feed produces —
+  // mirror liveTextRow so both paths yield identical rows. A null content means
+  // no readable body (nothing to copy or open), so skip it rather than render a
+  // blank, dead row.
+  if (item.content == null) return null;
+  const isLink = item.payloadType === "LINK";
+  const content = item.content;
   return {
     id: item.id,
-    kind: item.payloadType === "LINK" ? "link" : "snippet",
-    name: item.fileName ?? "",
-    status: item.delivered ? "delivered" : "in_progress",
+    kind: isLink ? "link" : "snippet",
+    name: isLink ? content : snippetPreview(content),
+    // Text and links land whole; a persisted one is delivered by definition.
+    status: "delivered",
+    href: isLink ? content : undefined,
+    value: content,
     receivedAt,
   };
 }
@@ -109,7 +121,8 @@ export function mergeTransferLog({
   const rows = new Map<string, TransferLogRow>();
 
   for (const item of history) {
-    rows.set(item.id, historyRow(item, downloadHref));
+    const row = historyRow(item, downloadHref);
+    if (row) rows.set(item.id, row);
   }
 
   const overlay = (row: TransferLogRow) => {
