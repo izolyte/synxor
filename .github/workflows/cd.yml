@@ -97,6 +97,18 @@ jobs:
           source: deploy/docker-compose.prod.yml
           target: ${{ secrets.DEPLOY_PATH }}
           strip_components: 1
+      # nginx renders these at startup; ship them so the ./nginx/templates mount
+      # resolves. Certs are operator-provided in $DEPLOY_PATH/nginx/certs and never
+      # travel through CI.
+      - name: Copy nginx config to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "nginx/templates/*"
+          target: ${{ secrets.DEPLOY_PATH }}/nginx/templates
+          strip_components: 2
       - name: Pull images, restart stack, health-check
         uses: appleboy/ssh-action@v1.2.0
         env:
@@ -119,23 +131,28 @@ jobs:
             # Pin the stack to this commit's images (metadata-action emits a
             # 7-char short-sha tag). Falls back to `latest` inside the compose.
             export SYNXOR_IMAGE_TAG="sha-$(echo "$IMAGE_SHA" | cut -c1-7)"
+            # Preflight: nginx aborts on a missing cert, and an empty bind-mount
+            # dir looks like "no certs" — fail fast with a clear message instead of
+            # a mystery timeout.
+            if [ -z "$(ls -A nginx/certs 2>/dev/null | grep -v '^\.')" ]; then
+              echo "::error::no TLS certs in $DEPLOY_PATH/nginx/certs — place them before deploying"
+              exit 1
+            fi
             docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
             docker logout "$REGISTRY" || true
-            # Ask compose which host port api:3000 actually maps to, rather than
-            # assuming 3000 — the operator's .env may set API_PORT to anything.
-            # Take the first mapping line and the segment after the last colon, so
-            # a dual-stack "[::]:PORT" line still yields just the port.
-            api_port="$(docker compose -f docker-compose.prod.yml port api 3000 | head -n1 | sed 's/.*://')"
-            # Fail the deploy if the api never reports healthy (~60s budget).
-            for i in $(seq 1 30); do
-              if curl -fsS "http://127.0.0.1:${api_port}/health" | grep -q '"status":"ok"'; then
-                echo "health check passed"
-                exit 0
-              fi
-              echo "waiting for api health ($i/30)…"
-              sleep 2
-            done
-            echo "::error::api /health did not return {\"status\":\"ok\"} after deploy"
-            docker compose -f docker-compose.prod.yml logs --tail=50 api || true
-            exit 1
+            # --wait gates on every service's healthcheck (nginx starts only once
+            # api and web are healthy). Generous timeout: a cold 1 GB VPS runs
+            # prisma migrate/generate before api is healthy.
+            if ! docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 240; then
+              echo "::error::stack did not become healthy after deploy"
+              docker compose -f docker-compose.prod.yml logs --tail=80
+              exit 1
+            fi
+            # End-to-end: nginx has no healthcheck, so prove the ingress actually
+            # serves over TLS and routes to an upstream (not just "running").
+            if ! curl -fsk https://127.0.0.1/healthz >/dev/null; then
+              echo "::error::nginx ingress did not serve https://.../healthz after deploy"
+              docker compose -f docker-compose.prod.yml logs --tail=80 nginx
+              exit 1
+            fi
+            echo "deploy healthy — ingress serving"
