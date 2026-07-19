@@ -46,7 +46,9 @@ export function useFileQueue() {
         const id = fileKey(file);
 
         if (seen.has(id)) {
-          pendingNotice = { kind: "error", message: "This file is already queued." };
+          // A re-drop of an already-queued file is a harmless mistake, not a
+          // rejection to alarm over (docs/design/15-edge-cases.md) — warn, don't error.
+          pendingNotice = { kind: "warning", message: "This file is already queued." };
           continue;
         }
         if (file.size > MAX_FILE_SIZE_BYTES) {

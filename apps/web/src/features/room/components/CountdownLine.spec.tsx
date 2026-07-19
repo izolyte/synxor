@@ -16,4 +16,14 @@ suite("CountdownLine", () => {
     await line.shouldBeVisible();
     await line.shouldHaveAttribute("data-phase", "expiring");
   });
+
+  test("reads 'Expiring…' during the sealing window, not a zero countdown", async () => {
+    // Past the TTL a Transfer may still be finishing; the label is meaningless, so
+    // it drops to a status word rather than "0m left".
+    const screen = renderComponent(<CountdownLine label="0s" phase="expired" />);
+
+    const line = screen.find({ text: "Expiring…" });
+    await line.shouldBeVisible();
+    await line.shouldHaveAttribute("data-phase", "expired");
+  });
 });

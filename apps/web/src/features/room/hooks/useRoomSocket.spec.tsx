@@ -9,10 +9,29 @@ import { TransferEvent, type TransferProgressPayload } from "~/features/room/con
 
 type Handler = (payload?: unknown) => void;
 
+// The reconnection lifecycle rides the Manager (socket.io), not the Socket, so the
+// fake mirrors that split: `io` is a bare emitter the hook subscribes to for
+// "reconnect_failed".
+class FakeManager {
+  private readonly handlers = new Map<string, Handler>();
+  on(event: string, cb: Handler): this {
+    this.handlers.set(event, cb);
+    return this;
+  }
+  off(): this {
+    this.handlers.clear();
+    return this;
+  }
+  emit(event: string, payload?: unknown): void {
+    this.handlers.get(event)?.(payload);
+  }
+}
+
 // Records handlers so the Harness buttons can fire socket events inside userEvent's
 // act() — driving the hook the way a real server would, without a socket.
 class FakeSocket {
   private readonly handlers = new Map<string, Handler>();
+  readonly io = new FakeManager();
   // Outgoing emits the hook makes (e.g. sendText), so a test can assert them.
   readonly sent: Array<{ event: string; payload?: unknown }> = [];
   on(event: string, cb: Handler): this {
@@ -90,6 +109,7 @@ function Harness({
       <button onClick={() => socket.emit("connect")}>connect</button>
       <button onClick={() => socket.emit("disconnect")}>drop</button>
       <button onClick={() => socket.emit("connect_error")}>fail</button>
+      <button onClick={() => socket.io.emit("reconnect_failed")}>give-up</button>
       <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: 1 })}>join</button>
       <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: "x" })}>garbage</button>
       <button onClick={() => socket.emit(RoomEvent.Left, { receiverCount: 0 })}>leave</button>
@@ -150,6 +170,23 @@ suite("useRoomSocket", () => {
 
     await screen.find({ role: "button", name: "fail" }).click();
     await screen.find({ testId: "status" }).shouldHaveText("disconnected");
+  });
+
+  test("reports lost once the Manager exhausts its reconnect attempts", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "give-up" }).click();
+    await screen.find({ testId: "status" }).shouldHaveText("lost");
+  });
+
+  test("recovers from lost when the socket connects again (manual refresh, network back)", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+
+    await screen.find({ role: "button", name: "give-up" }).click();
+    await screen.find({ testId: "status" }).shouldHaveText("lost");
+
+    await screen.find({ role: "button", name: "connect" }).click();
+    await screen.find({ testId: "status" }).shouldHaveText("connected");
   });
 
   test("coerces a malformed count to 0 instead of rendering NaN", async () => {

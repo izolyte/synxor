@@ -1,4 +1,4 @@
-import { useCallback, useRef, type ChangeEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, type ChangeEvent, type KeyboardEvent } from "react";
 import {
   closestCenter,
   DndContext,
@@ -38,6 +38,7 @@ export function DropZone({
   apiOrigin,
   uploader,
   delivered,
+  onActiveChange,
 }: {
   token?: string;
   apiOrigin?: string;
@@ -46,9 +47,18 @@ export function DropZone({
   /** transferIds a Receiver has finished downloading — flips a Sent row to
    *  Delivered. Absent (no live socket, tests) leaves rows at Sent. */
   delivered?: ReadonlySet<string>;
+  /** Reports whether a local upload is in flight. The Room-sealing window needs
+   *  this because a Sender's own upload isn't in the socket `transfers` feed
+   *  until the server echoes its first progress broadcast. */
+  onActiveChange?: (active: boolean) => void;
 }) {
   const { files, notice, addFiles, rejectFolder, removeFile, reorderFiles } = useFileQueue();
   const uploads = useFileUploads(files, token, apiOrigin, uploader);
+
+  const uploading = [...uploads.values()].some((state) => state.phase === "uploading");
+  useEffect(() => {
+    onActiveChange?.(uploading);
+  }, [uploading, onActiveChange]);
   const inputRef = useRef<HTMLInputElement>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),

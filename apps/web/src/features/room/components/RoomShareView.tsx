@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { ScreenHeader } from "~/shared/components/ScreenHeader";
 import { RoomCode } from "~/features/room/components/RoomCode";
 import { CopyButton } from "~/features/room/components/CopyButton";
 import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
+import { ConnectionAlert } from "~/features/room/components/ConnectionAlert";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { DropZone } from "~/features/room/components/DropZone";
 import { TextPasteField } from "~/features/room/components/TextPasteField";
@@ -10,7 +12,8 @@ import { IncomingTransfers } from "~/features/room/components/IncomingTransfers"
 import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
 import { TransferLog } from "~/features/room/components/TransferLog";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
-import { useRoomSocket } from "~/features/room/hooks/useRoomSocket";
+import { useRoomSocket, type SocketFactory } from "~/features/room/hooks/useRoomSocket";
+import type { Uploader } from "~/features/room/hooks/useFileUploads";
 import { useTransferLogRows } from "~/features/room/hooks/useTransferLog";
 import { useClipboard } from "~/features/room/hooks/useClipboard";
 import type { RoomRole } from "~/features/room/services/room-session.service";
@@ -25,27 +28,54 @@ import { buildUrl } from "~/shared/utils/url";
  *
  * `expiresAt` is absent for a Receiver's session (its join response carries no
  * expiry); the countdown then simply doesn't render.
+ *
+ * `socketFactory` is a test seam (mirrors DropZone's `uploader`): production leaves
+ * it undefined and useRoomSocket dials the real server.
  */
 export function RoomShareView({
   roomCode,
   expiresAt,
   token,
   role = "sender",
+  socketFactory,
+  uploader,
   transferHistory = [],
 }: {
   roomCode: string;
   expiresAt: string | undefined;
   token?: string;
   role?: RoomRole;
+  socketFactory?: SocketFactory;
+  /** Test seam forwarded to DropZone; production uses the real chunked uploader. */
+  uploader?: Uploader;
   /** Persisted Transfer history for the Log, fetched by the route (RoomPage). */
   transferHistory?: TransferHistory;
 }) {
   const countdown = useCountdown(expiresAt);
-  const livePresenceToken = countdown?.phase === "expired" ? undefined : token;
-  const { status, receiverCount, transfers, texts, delivered, sendText } =
-    useRoomSocket(livePresenceToken);
+  const expired = countdown?.phase === "expired";
+
+  // Expiry never severs a Transfer mid-flight. Past the TTL we hold the Room open
+  // while any Transfer is still moving and seal only once it lands
+  // (docs/design/15-edge-cases.md). `sealed` latches so cutting the socket — which
+  // empties `transfers` — can't un-seal the Room and flip it back open.
+  const [sealed, setSealed] = useState(false);
+  const socketToken = sealed ? undefined : token;
+  const { status, receiverCount, transfers, texts, delivered, sendText } = useRoomSocket(
+    socketToken,
+    socketFactory,
+  );
   // Same origin the socket rides; only resolved with a live token (client-only).
-  const apiOrigin = livePresenceToken ? resolveApiOrigin(import.meta.env) : undefined;
+  const apiOrigin = socketToken ? resolveApiOrigin(import.meta.env) : undefined;
+
+  // `transfers` is the whole-Room socket feed, which covers a Receiver's download
+  // but NOT a Sender's own upload until the server echoes its first progress
+  // broadcast — so fold in DropZone's local upload state, or a file dropped in
+  // the last RTT before expiry could seal the Room mid-upload.
+  const [senderUploading, setSenderUploading] = useState(false);
+  const transferActive = transfers.some((t) => !t.complete) || senderUploading;
+  useEffect(() => {
+    if (expired && !transferActive) setSealed(true);
+  }, [expired, transferActive]);
 
   const clipboard = useClipboard();
   const logRows = useTransferLogRows({
@@ -53,11 +83,11 @@ export function RoomShareView({
     transfers,
     texts,
     delivered,
-    token: livePresenceToken,
+    token: socketToken,
     apiOrigin,
   });
 
-  if (countdown?.phase === "expired") {
+  if (sealed || (expired && !transferActive)) {
     return (
       <RoomNotice
         title="Room expired"
@@ -94,15 +124,27 @@ export function RoomShareView({
         />
       </div>
 
-      {/* Ambient status, grouped tighter than the action rhythm above it. */}
+      {/* Ambient status, grouped tighter than the action rhythm above it. A
+          terminally lost socket takes over the presence slot: the count is stale,
+          and the one thing that helps now is a refresh. */}
       <div className="flex flex-col gap-2">
         {countdown && <CountdownLine label={countdown.label} phase={countdown.phase} />}
-        <WaitingForReceiver status={status} receiverCount={receiverCount} />
+        {status === "lost" ? (
+          <ConnectionAlert />
+        ) : (
+          <WaitingForReceiver status={status} receiverCount={receiverCount} />
+        )}
       </div>
 
       {role === "sender" ? (
         <div className="flex flex-col gap-3">
-          <DropZone token={livePresenceToken} apiOrigin={apiOrigin} delivered={delivered} />
+          <DropZone
+            token={socketToken}
+            apiOrigin={apiOrigin}
+            delivered={delivered}
+            uploader={uploader}
+            onActiveChange={setSenderUploading}
+          />
           <TextPasteField onSend={sendText} />
         </div>
       ) : (
@@ -110,7 +152,7 @@ export function RoomShareView({
           <IncomingTransfers
             transfers={transfers}
             texts={texts}
-            token={livePresenceToken}
+            token={socketToken}
             apiOrigin={apiOrigin}
             delivered={delivered}
           />

@@ -32,4 +32,13 @@ suite("WaitingForReceiver", () => {
 
     await screen.find({ role: "status" }).shouldHaveText("Receiver connected");
   });
+
+  test("yields the presence slot when the connection is lost, avoiding a stale count", async () => {
+    // A terminally lost socket is owned by ConnectionAlert; echoing "2 Receivers
+    // connected" here would contradict it, so the line renders nothing.
+    const screen = renderComponent(<WaitingForReceiver status="lost" receiverCount={2} />);
+
+    await screen.find({ text: "2 Receivers connected" }).shouldNotExist();
+    await screen.find({ role: "status" }).shouldNotExist();
+  });
 });
