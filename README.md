@@ -97,6 +97,22 @@ STORAGE_BUCKET=synxor
 
 No code changes needed.
 
+## Releasing
+
+Releases are cut from `main` with [release-it](https://github.com/release-it/release-it). The
+version bump and `CHANGELOG.md` are derived from Conventional Commits (the same format
+commitlint enforces), so there's nothing to bump by hand — merge PRs with conventional titles and
+the history does the rest.
+
+```bash
+export GITHUB_TOKEN=...   # a token with repo scope, for the GitHub Release
+pnpm release              # or: pnpm release --dry-run to preview version + changelog
+```
+
+`pnpm release` picks the next semver from the commits since the last `v*` tag, regenerates
+`CHANGELOG.md`, commits it with the version bump, tags `vX.Y.Z`, pushes, and opens a GitHub Release
+with the same notes. Nothing is published to npm. The first release is `v0.1.0`.
+
 ## License
 
 UNLICENSED — self-hosted personal use.
