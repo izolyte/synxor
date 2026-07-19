@@ -40,6 +40,14 @@ export class PrismaTransferRepository implements TransferRepository {
     return fp ? this.toFilePayloadEntity(fp) : null;
   }
 
+  async findFilePayloadsByTransferIds(transferIds: string[]): Promise<FilePayload[]> {
+    if (transferIds.length === 0) return [];
+    const fps = await this.prisma.filePayload.findMany({
+      where: { transferId: { in: transferIds } },
+    });
+    return fps.map((fp) => this.toFilePayloadEntity(fp));
+  }
+
   async listStorageKeysByRoomId(roomId: string): Promise<string[]> {
     const payloads = await this.prisma.filePayload.findMany({
       where: { transfer: { roomId } },
