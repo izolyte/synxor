@@ -44,21 +44,25 @@ services:
     networks:
       - synxor
 
-  # Certificate issuance + renewal. No long-running process: the container exits
-  # immediately (`command: true`) and is driven on demand —
+  # Certificate issuance + renewal, driven on demand —
   #   docker compose run --rm certbot certonly --webroot -w /var/www/certbot -d ...
   # for the first issue, and the same `certbot renew` on a host cron. It writes
   # into the deploy-owned nginx/certs mount, so no root or /etc/letsencrypt access
   # is needed. See nginx/README.md → Production.
+  #
+  # `profiles` keeps it out of the normal `docker compose up` (CD brings the stack
+  # up without a profile, so certbot stays down); `run --rm certbot …` still starts
+  # it because naming a service explicitly ignores its profile. The image's default
+  # entrypoint (`certbot`) is left intact — that's what makes those run commands
+  # resolve `certonly`/`renew` to the certbot binary.
   certbot:
     image: certbot/certbot:latest
+    profiles: ["certbot"]
     volumes:
       # certbot's --config-dir is /etc/letsencrypt; mapping it at nginx/certs puts
       # live/<domain>/{fullchain,privkey}.pem where TLS_CERT_PATH/TLS_KEY_PATH expect.
       - ./nginx/certs:/etc/letsencrypt
       - certbot_webroot:/var/www/certbot
-    entrypoint: ""
-    command: "true"
     networks:
       - synxor
 
