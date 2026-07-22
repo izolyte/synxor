@@ -36,12 +36,19 @@ upstream synxor_web {
     server web:3000;
 }
 
-# Plain HTTP — bounce everything to HTTPS. (A production ACME http-01 challenge
-# would be served from here, before the redirect, when issuing real certs.)
+# Plain HTTP — serve the ACME http-01 challenge, bounce everything else to HTTPS.
 server {
     listen 80;
     listen [::]:80;
     server_name _;
+
+    # Let's Encrypt writes its challenge tokens under this webroot (shared with
+    # the certbot container); nginx must answer them over plain HTTP, so this
+    # location sits ahead of the HTTPS redirect. In dev the path is empty and a
+    # missing token just 404s — harmless.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
 
     location / {
         # Redirect to the configured canonical origin — never the request's own
