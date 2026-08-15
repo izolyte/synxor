@@ -16,11 +16,33 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
       roomId: input.roomId,
       role: input.role,
       tokenHash: input.tokenHash,
+      displayName: input.displayName ?? null,
       joinedAt: new Date(),
       disconnectedAt: null,
     };
     this.stored.set(participant.id, participant);
     return participant;
+  }
+
+  async findDisplayName(roomId: string, tokenHash: string): Promise<string | null> {
+    for (const p of this.stored.values()) {
+      if (p.roomId === roomId && p.tokenHash === tokenHash && p.displayName !== null) {
+        return p.displayName;
+      }
+    }
+    return null;
+  }
+
+  async setDisplayName(
+    roomId: string,
+    tokenHash: string,
+    displayName: string | null,
+  ): Promise<void> {
+    for (const [id, p] of this.stored) {
+      if (p.roomId === roomId && p.tokenHash === tokenHash) {
+        this.stored.set(id, { ...p, displayName });
+      }
+    }
   }
 
   async findByRoomId(roomId: string): Promise<Participant[]> {

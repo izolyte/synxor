@@ -4,6 +4,11 @@ import {
   type ParticipantRepository,
 } from '../domain/participant/participant.repository';
 import type { ParticipantRole } from '../domain/participant/participant.entity';
+import {
+  deriveIdentity,
+  sanitizeDisplayName,
+  type ParticipantIdentity,
+} from '../domain/participant/participant-identity';
 
 export interface RecordJoinInput {
   roomId: string;
@@ -16,9 +21,16 @@ export interface RecordLeaveInput {
   roomId: string;
 }
 
+export interface RenameInput {
+  roomId: string;
+  tokenHash: string;
+  displayName: string | null;
+}
+
 export interface JoinResult {
   participantId: string;
   receiverCount: number;
+  identity: ParticipantIdentity;
 }
 
 export interface LeaveResult {
@@ -50,9 +62,22 @@ export class RoomPresenceService implements OnApplicationBootstrap {
   }
 
   async recordJoin(input: RecordJoinInput): Promise<JoinResult> {
-    const participant = await this.participants.create(input);
+    // Carry forward any name this identity was already given, so a reconnect
+    // keeps its edited name and every row of the identity stays consistent.
+    const displayName = await this.participants.findDisplayName(input.roomId, input.tokenHash);
+    const participant = await this.participants.create({ ...input, displayName });
     const receiverCount = await this.participants.countConnected(input.roomId, 'RECEIVER');
-    return { participantId: participant.id, receiverCount };
+    const identity = deriveIdentity(input.tokenHash, displayName);
+    return { participantId: participant.id, receiverCount, identity };
+  }
+
+  // Edits an identity's display name for the Room's life. Persisted across every
+  // connection row of the identity and returned so the caller can broadcast it.
+  // A blank name clears the override, reverting to the auto "Colour Noun".
+  async rename(input: RenameInput): Promise<ParticipantIdentity> {
+    const displayName = sanitizeDisplayName(input.displayName);
+    await this.participants.setDisplayName(input.roomId, input.tokenHash, displayName);
+    return deriveIdentity(input.tokenHash, displayName);
   }
 
   async recordLeave(input: RecordLeaveInput): Promise<LeaveResult> {

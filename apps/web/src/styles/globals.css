@@ -159,6 +159,23 @@
     --color-room-expiring: var(--color-warning);
     --color-room-expired: var(--color-error);
 
+    /* ── Participant identity (issue #102) ──
+       Curated off-teal hues for per-Participant colour, assigned server-side and
+       mapped by colorKey. Each is a name/text colour that clears WCAG 4.5:1 on the
+       app surfaces (light on --color-surface-raised: 5.2–5.7:1). Avatars fill with
+       the hue and set initials in --identity-ink, a mode-aware on-colour that
+       clears 4.5:1 against every hue. Keep in sync with the API palette
+       (domain/participant/participant-identity.ts). */
+    --identity-violet:  oklch(0.50 0.15 290);
+    --identity-indigo:  oklch(0.50 0.15 268);
+    --identity-plum:    oklch(0.50 0.15 322);
+    --identity-magenta: oklch(0.50 0.15 340);
+    --identity-rose:    oklch(0.50 0.15 358);
+    --identity-coral:   oklch(0.50 0.15 40);
+    --identity-amber:   oklch(0.50 0.15 72);
+    --identity-gold:    oklch(0.50 0.15 96);
+    --identity-ink:     oklch(1 0 0);
+
     /* ── Motion ── */
     --duration-instant: 0ms;
     --duration-fast: 100ms;
@@ -323,6 +340,19 @@
     --color-info-subtle: oklch(0.18 0.02 200);
     --color-info-border: oklch(0.38 0.06 200);
     --color-room-empty: oklch(0.42 0.008 200);
+
+    /* Participant identity dark tones — lighter so the hue clears 4.5:1 on the
+       dark surfaces (on --color-surface-raised: 8.5–9.1:1); ink flips to near-black
+       for legible initials on the lighter avatar fill. */
+    --identity-violet:  oklch(0.78 0.13 290);
+    --identity-indigo:  oklch(0.78 0.13 268);
+    --identity-plum:    oklch(0.78 0.13 322);
+    --identity-magenta: oklch(0.78 0.13 340);
+    --identity-rose:    oklch(0.78 0.13 358);
+    --identity-coral:   oklch(0.78 0.13 40);
+    --identity-amber:   oklch(0.78 0.13 72);
+    --identity-gold:    oklch(0.78 0.13 96);
+    --identity-ink:     oklch(0.16 0 0);
 
     /* Skeleton dark overrides */
     --skeleton-bg:      oklch(0.20 0.008 200);

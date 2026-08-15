@@ -9,7 +9,10 @@ import {
   type TransferLogRow,
 } from "~/features/room/utils/transfer-log";
 import type { RoomText } from "~/features/room/hooks/useRoomSocket";
-import type { TransferProgressPayload } from "~/features/room/constants/transfer";
+import type {
+  ParticipantIdentity,
+  TransferProgressPayload,
+} from "~/features/room/constants/transfer";
 
 // Bound to the Room route so the query can read the tRPC proxy from context.
 // Called from RoomPage (route-mounted, providers present), never from a bare
@@ -37,6 +40,8 @@ export interface UseTransferLogRowsArgs {
   ownIds: ReadonlySet<string>;
   /** Whether this client is the Sender — the only Participant that uploads files. */
   isSender: boolean;
+  /** Latest identity per key, from rename broadcasts — re-labels renamed peers. */
+  identityOverrides?: ReadonlyMap<string, ParticipantIdentity>;
   /** Live session token; absent (SSR / expired) drops the download links. */
   token: string | undefined;
   apiOrigin: string | undefined;
@@ -54,6 +59,7 @@ export function useTransferLogRows({
   delivered,
   ownIds,
   isSender,
+  identityOverrides,
   token,
   apiOrigin,
 }: UseTransferLogRowsArgs): TransferLogRow[] {
@@ -82,8 +88,9 @@ export function useTransferLogRows({
         ownIds,
         isSender,
         liveTimestamps: seenRef.current,
+        identityOverrides,
         downloadHref,
       }),
-    [history, transfers, texts, delivered, ownIds, isSender, downloadHref],
+    [history, transfers, texts, delivered, ownIds, isSender, identityOverrides, downloadHref],
   );
 }

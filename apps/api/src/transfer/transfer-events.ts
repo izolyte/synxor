@@ -1,4 +1,5 @@
 import type { ParticipantRole } from '../domain/participant/participant.entity';
+import type { ParticipantIdentity } from '../domain/participant/participant-identity';
 
 // Server → client transfer events. Same contract-in-one-place rule as
 // room-events.ts: FE and BE both import these names, nobody hard-codes a literal.
@@ -25,10 +26,12 @@ export interface TransferDeliveredPayload {
   transferId: string;
 }
 
-// Who sent a Text Snippet / Link. Role only for now — the stream attributes by
-// it; #102 layers a stable per-author identity on top.
+// Who sent a Text Snippet / Link: the role plus the author's stable identity
+// (colour + name) so the stream attributes it by name in the author's colour.
+// `identity` is null only for the rare case of a file with no resolvable Sender.
 export interface TransferAuthor {
   role: ParticipantRole;
+  identity: ParticipantIdentity | null;
 }
 
 export interface TransferTextPayload {

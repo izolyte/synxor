@@ -13,6 +13,13 @@ import { TokenRole, type TokenClaims } from '../domain/security/token-issuer';
 import { InMemoryParticipantRepository } from '../domain/participant/participant.repository.fake';
 import { TRANSFER_REPOSITORY } from '../domain/transfer/transfer.repository';
 import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
+import { deriveIdentity } from '../domain/participant/participant-identity';
+import { hashRoomToken } from '../infrastructure/security/token-hash';
+
+// The gateway keys identity off the Room Token hash, so the spec derives the
+// expected identity from the same token strings the fake verifier registers.
+const senderIdentity = deriveIdentity(hashRoomToken('sender-tok'));
+const receiverIdentity = deriveIdentity(hashRoomToken('receiver-tok'));
 
 // Stands in for RoomService in the gateway: records the Rooms asked to close so
 // the close handler's wiring can be asserted without a DB or storage.
@@ -359,7 +366,7 @@ describe('RoomGateway', () => {
       transferId: ack.transferId,
       payloadType: 'LINK',
       content: 'https://example.com/x',
-      author: { role: 'SENDER' },
+      author: { role: 'SENDER', identity: senderIdentity },
     });
   });
 
@@ -427,7 +434,7 @@ describe('RoomGateway', () => {
       transferId: ack.transferId,
       payloadType: 'TEXT_SNIPPET',
       content: 'ping from the Receiver',
-      author: { role: 'RECEIVER' },
+      author: { role: 'RECEIVER', identity: receiverIdentity },
     });
 
     const transfer = await fakeTransfers.findById(ack.transferId);
@@ -486,6 +493,86 @@ describe('RoomGateway', () => {
 
     const ack = (await sendText(sender, 'a'.repeat(100_001))) as { error: string };
     expect(ack.error).toMatch(/character limit/);
+  });
+
+  // ── Participant identity ─────────────────────────────────────────────────────
+
+  function rename(socket: Socket, name: string): Promise<unknown> {
+    return new Promise((resolve) => socket.emit('room:rename', { name }, resolve));
+  }
+
+  it('assigns the joining socket its own identity, deterministic from its token', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    const sender = open('sender-tok');
+
+    expect(await waitFor(sender, 'room:identity:self')).toEqual(senderIdentity);
+  });
+
+  it('gives two Participants distinct broadcast identities', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    const senderSelf = await waitFor(sender, 'room:identity:self');
+    const receiver = open('receiver-tok');
+    const receiverSelf = await waitFor(receiver, 'room:identity:self');
+
+    expect(senderSelf).toEqual(senderIdentity);
+    expect(receiverSelf).toEqual(receiverIdentity);
+    expect(senderSelf).not.toEqual(receiverSelf);
+  });
+
+  it('keeps the same identity when a Participant reconnects with the same token', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+
+    const first = open('sender-tok');
+    const firstIdentity = await waitFor(first, 'room:identity:self');
+    first.disconnect();
+
+    const second = open('sender-tok');
+    const secondIdentity = await waitFor(second, 'room:identity:self');
+
+    expect(secondIdentity).toEqual(firstIdentity);
+  });
+
+  it('broadcasts a renamed identity and attributes later Transfers to the new name', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await waitFor(sender, 'connect');
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:joined');
+
+    const announced = waitFor(receiver, 'room:identity');
+    const ack = (await rename(sender, 'Alice')) as { identity: { name: string; colorKey: string } };
+    expect(ack.identity.name).toBe('Alice');
+    // Same colour + opaque key — only the name changes.
+    expect(ack.identity.colorKey).toBe(senderIdentity.colorKey);
+
+    // Peers hear the rename so they can re-label the Sender's earlier messages.
+    expect(await announced).toEqual(ack.identity);
+
+    // The next Transfer carries the edited name, not the auto one.
+    const received = waitFor(receiver, 'transfer:text');
+    await sendText(sender, 'after the rename');
+    expect((await received) as { author: { identity: { name: string } } }).toMatchObject({
+      author: { identity: { name: 'Alice' } },
+    });
+  });
+
+  it('persists the edited name across a reconnect', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+
+    const first = open('sender-tok');
+    await waitFor(first, 'room:identity:self');
+    await rename(first, 'Alice');
+    first.disconnect();
+
+    const second = open('sender-tok');
+    expect((await waitFor(second, 'room:identity:self')) as { name: string }).toMatchObject({
+      name: 'Alice',
+    });
   });
 
   // ── Close Room ───────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import { ConnectionAlert } from "~/features/room/components/ConnectionAlert";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { DropZone } from "~/features/room/components/DropZone";
 import { TextPasteField } from "~/features/room/components/TextPasteField";
+import { SelfIdentity } from "~/features/room/components/SelfIdentity";
 import { RoomStream } from "~/features/room/components/RoomStream";
 import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
 import { ExpiryWarningNotice } from "~/features/room/components/ExpiryWarningNotice";
@@ -69,8 +70,19 @@ export function RoomShareView({
   // empties `transfers` — can't un-seal the Room and flip it back open.
   const [sealed, setSealed] = useState(false);
   const socketToken = sealed ? undefined : token;
-  const { status, receiverCount, transfers, texts, delivered, closed, sendText, closeRoom } =
-    useRoomSocket(socketToken, socketFactory);
+  const {
+    status,
+    receiverCount,
+    transfers,
+    texts,
+    delivered,
+    closed,
+    self,
+    identities,
+    sendText,
+    closeRoom,
+    rename,
+  } = useRoomSocket(socketToken, socketFactory);
   const apiOrigin = socketToken ? resolveApiOrigin(import.meta.env) : undefined;
 
   const [senderUploading, setSenderUploading] = useState(false);
@@ -88,6 +100,7 @@ export function RoomShareView({
     delivered,
     ownIds: own.ids,
     isSender,
+    identityOverrides: identities,
     token: socketToken,
     apiOrigin,
   });
@@ -183,6 +196,7 @@ export function RoomShareView({
               onActiveChange={setSenderUploading}
             />
           )}
+          <SelfIdentity self={self} onRename={rename} />
           {/* Past the Expiry the Room is held open only to land an in-flight
               Transfer — seal the composer so nothing new goes into a dead Room. */}
           <TextPasteField onSend={handleSend} disabled={expired} />

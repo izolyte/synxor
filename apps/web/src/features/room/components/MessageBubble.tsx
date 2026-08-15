@@ -8,17 +8,42 @@ import {
 } from "lucide-react";
 import type { TransferAuthor } from "~/features/room/constants/transfer";
 import type { TransferLogRow } from "~/features/room/utils/transfer-log";
+import { hasIdentity, identityColorVar } from "~/features/room/constants/identity";
+import { ParticipantAvatar } from "~/features/room/components/ParticipantAvatar";
 import { formatFileSize } from "~/features/room/utils/format-file-size";
 import { formatTransferTime } from "~/features/room/utils/format-time";
 import { buttonVariants } from "~/shared/ui/button";
 import { cn } from "~/shared/utils/cn";
 
-// Minimal author label for #99: the Participant's role. #102 swaps this for the
-// generated colour + name; the stream is already author-keyed, so it slots in
-// here.
-function authorLabel(author: TransferAuthor | null): string {
+// Fallback caption when a peer has no resolved identity yet (a live file row
+// before the Sender is known): the bare role, as the stream showed before #102.
+function roleLabel(author: TransferAuthor | null): string {
   if (!author) return "Participant";
   return author.role === "SENDER" ? "Sender" : "Receiver";
+}
+
+// An incoming message's caption: the author's identity avatar + name in their
+// colour, or a bare role label when no identity is known.
+function AuthorCaption({ author }: { author: TransferAuthor | null }) {
+  const identity = author?.identity;
+  if (!hasIdentity(identity)) {
+    return (
+      <span className="px-1 text-xs font-medium text-[var(--color-ink-muted)]">
+        {roleLabel(author)}
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1.5 px-1">
+      <ParticipantAvatar name={identity.name} colorKey={identity.colorKey} size="sm" />
+      <span
+        className="text-xs font-semibold"
+        style={{ color: identityColorVar(identity.colorKey) }}
+      >
+        {identity.name}
+      </span>
+    </span>
+  );
 }
 
 /**
@@ -44,11 +69,7 @@ export function MessageBubble({
         row.mine ? "items-end" : "items-start",
       )}
     >
-      {!row.mine && (
-        <span className="px-1 text-xs font-medium text-[var(--color-ink-muted)]">
-          {authorLabel(row.author)}
-        </span>
-      )}
+      {!row.mine && <AuthorCaption author={row.author} />}
 
       <div
         className={cn(

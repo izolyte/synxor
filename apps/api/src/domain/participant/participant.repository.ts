@@ -8,6 +8,12 @@ export interface ParticipantRepository {
   // Batched author lookup for the Transfer Log: resolves a set of authoring
   // Participants in one round-trip instead of one per Transfer.
   findByIds(ids: string[]): Promise<Participant[]>;
+  // The current edited name for an identity (roomId + tokenHash), or null. Keyed
+  // on the stable tokenHash, not a connection row, so it survives reconnect.
+  findDisplayName(roomId: string, tokenHash: string): Promise<string | null>;
+  // Sets (or clears, with null) the edited name across every connection row of an
+  // identity, so all of a Participant's Transfers resolve to the new name.
+  setDisplayName(roomId: string, tokenHash: string, displayName: string | null): Promise<void>;
   setDisconnected(id: string, at: Date): Promise<Participant>;
   countConnected(roomId: string, role?: ParticipantRole): Promise<number>;
   /**

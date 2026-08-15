@@ -45,6 +45,11 @@ model Participant {
   // token reconnects (refresh, socket.io retry) as a fresh row, so the hash
   // repeats across a session — kept only as an audit trail of who joined.
   tokenHash      String
+  // An edited display name for this Participant's identity, or null for the auto
+  // "Colour Noun". Held on every connection row sharing a (roomId, tokenHash) so
+  // it survives reconnect for the Room's life; the colour + auto name are derived
+  // from tokenHash and need no column.
+  displayName    String?
   joinedAt       DateTime        @default(now())
   disconnectedAt DateTime?
 
