@@ -14,15 +14,15 @@ export const copy = {
     notFound: "Page not found.",
   },
   createRoom: {
-    heading: "New Room",
-    expiryLabel: "Expires after",
+    // The landing's display headline doubles as the page heading.
+    heading: "Send it. It vanishes.",
     expiry: {
       "1h": "1 hour",
       "24h": "24 hours",
       "7d": "7 days",
     },
-    cta: "Create Room",
-    joinLink: "Join a Room",
+    cta: "Create a room",
+    joinLink: "Join a room",
     error: "Couldn't create the Room. Try again.",
   },
   joinRoom: {
