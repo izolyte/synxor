@@ -200,10 +200,45 @@ suite("RoomShareView", () => {
     await screen.find({ testId: "drop-zone" }).shouldBeVisible();
 
     await screen.find({ role: "button", name: "finish" }).click();
-    await screen
-      .find({ text: "This Room has expired. Create a new Room to send files." })
-      .shouldBeVisible();
+    await screen.find(selectors.room.expiredMessage).shouldBeVisible();
     await screen.find({ testId: "drop-zone" }).shouldNotExist();
+  });
+
+  test("seals the composer the moment the Room expires, while a Transfer still lands", async () => {
+    const socket = new FakeSocket();
+
+    function Expiring() {
+      const [expiresAt, setExpiresAt] = useState(new Date(Date.now() + HOUR).toISOString());
+      const factory = useMemo(() => () => socket as unknown as Socket, []);
+      return (
+        <>
+          <button onClick={() => setExpiresAt(new Date(Date.now() - 1000).toISOString())}>
+            run-out
+          </button>
+          <button onClick={() => socket.emit("connect")}>connect</button>
+          <button onClick={() => socket.emit(TransferEvent.Progress, progress(2, false))}>
+            start
+          </button>
+          <RoomShareView
+            roomCode="ABC123"
+            expiresAt={expiresAt}
+            token="tok"
+            socketFactory={factory}
+          />
+        </>
+      );
+    }
+
+    const screen = await renderRouted(Expiring);
+    await screen.find({ role: "button", name: "connect" }).click();
+    await screen.find({ role: "button", name: "start" }).click();
+    await screen.find(selectors.transfer.compose).shouldBeEnabled();
+
+    // Past the Expiry the Room stays open to land the Transfer, but the composer
+    // must not take anything new — there's no window to type into a dead Room.
+    await screen.find({ role: "button", name: "run-out" }).click();
+    await screen.find({ text: "Expiring…" }).shouldBeVisible();
+    await screen.find(selectors.transfer.compose).shouldBeDisabled();
   });
 
   test("holds an expired Room open while the Sender's own upload is still in flight", async () => {
@@ -249,9 +284,7 @@ suite("RoomShareView", () => {
     await screen.find({ testId: "drop-zone" }).shouldBeVisible();
 
     await act(async () => pending[0]());
-    await screen
-      .find({ text: "This Room has expired. Create a new Room to send files." })
-      .shouldBeVisible();
+    await screen.find(selectors.room.expiredMessage).shouldBeVisible();
   });
 
   test("surfaces a lost connection with a refresh prompt when reconnect fails", async () => {

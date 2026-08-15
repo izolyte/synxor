@@ -9,11 +9,21 @@ import { MAX_TEXT_PAYLOAD_CHARS } from "~/features/room/constants/transfer";
  * Participant. Enter sends and clears the field; Shift+Enter inserts a newline.
  * The server classifies text vs link and delivers it, so this only guards the
  * character limit — over it, the send is blocked with an inline error.
+ *
+ * `disabled` seals the composer once the Room is past its Expiry: while an
+ * in-flight Transfer holds the Room open to land, nothing new can be typed or sent
+ * into a Room that's already gone.
  */
-export function TextPasteField({ onSend }: { onSend: (text: string) => void }) {
+export function TextPasteField({
+  onSend,
+  disabled = false,
+}: {
+  onSend: (text: string) => void;
+  disabled?: boolean;
+}) {
   const [text, setText] = useState("");
   const tooLong = text.length > MAX_TEXT_PAYLOAD_CHARS;
-  const canSend = text.trim().length > 0 && !tooLong;
+  const canSend = !disabled && text.trim().length > 0 && !tooLong;
   const errorId = "text-paste-error";
 
   function submit() {
@@ -41,6 +51,7 @@ export function TextPasteField({ onSend }: { onSend: (text: string) => void }) {
           }
         }}
         rows={2}
+        disabled={disabled}
         placeholder="Type a message, paste text, or a link"
         aria-label="Text or link to send"
         aria-invalid={tooLong || undefined}
