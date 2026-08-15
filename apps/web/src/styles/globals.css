@@ -522,6 +522,20 @@
   }
 }
 
+/* The waiting-room beacon: a ring expands out of the presence dot and fades, so an
+   idle Sender sees the Room is live and listening. Applied via `motion-safe:`, so
+   reduced motion drops the ring and leaves a steady dot. */
+@keyframes ping {
+  0% {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
 /* Reveal for messages that appear on a state change (e.g. a form error). Token
    duration collapses to 0ms under prefers-reduced-motion, so it degrades to an
    instant switch. */
