@@ -40,7 +40,8 @@ export const copy = {
       ready: "Room ready",
       expired: "Room expired",
       closed: "Room closed",
-      unavailable: "Room unavailable",
+      // No held session for the code — the helper that offers the way in.
+      codeRequired: "Room Code required",
     },
     copyCode: "Copy code",
     copiedCode: "Copied",
@@ -49,11 +50,16 @@ export const copy = {
     waiting: "Waiting for Receiver",
     connected: "Receiver connected",
     createNew: "Create a new Room",
+    // The no-session helper's way in: join with the code, prefilled from the link.
+    joinWithCode: "Join with the code",
     // Sender's teardown control and its two-step confirm.
     deleteRoom: "Delete Room",
     confirmDelete: "Yes, delete",
     cancelDelete: "Keep Room",
     deleteError: "Couldn't close the Room — try again.",
+    // The two terminal Room states a Participant lands on.
+    expiredMessage:
+      "This Room reached its Expiry — every Transfer in it is gone. Create a new Room to send more.",
     // What a kicked Participant (or the Sender mid-redirect) sees.
     closedMessage: "The Sender closed this Room. Create a new Room to send files.",
   },
@@ -129,6 +135,12 @@ export const selectors = {
       role: "link",
       name: copy.room.createNew,
     } as const satisfies ActionableSelector,
+    joinWithCode: {
+      role: "link",
+      name: copy.room.joinWithCode,
+    } as const satisfies ActionableSelector,
+    expiredMessage: { text: copy.room.expiredMessage } as const satisfies ReadonlySelector,
+    closedMessage: { text: copy.room.closedMessage } as const satisfies ReadonlySelector,
     deleteRoom: { role: "button", name: copy.room.deleteRoom } as const satisfies ActionableSelector,
     confirmDelete: {
       role: "button",

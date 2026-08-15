@@ -47,7 +47,7 @@ suite("Room view", () => {
     await driver.find(selectors.room.copiedLink).shouldBeVisible();
   });
 
-  test("with an expired session, collapses to the expired notice", async () => {
+  test("with an expired session, collapses to the expired notice with no composer", async () => {
     roomSessionService.store("OLD123", {
       token: "tok-1",
       expiresAt: new Date(Date.now() - 1000).toISOString(),
@@ -57,6 +57,8 @@ suite("Room view", () => {
 
     await driver.find(selectors.room.heading("expired")).shouldBeVisible();
     await driver.find(selectors.room.createNew).shouldBeVisible();
+    // The live view is gone — a dead Room can't be typed into.
+    await driver.find(selectors.transfer.compose).shouldNotExist();
   });
 
   test("a Sender session gets the Drop Zone", async () => {
@@ -80,12 +82,24 @@ suite("Room view", () => {
     await driver.find({ testId: "drop-zone" }).shouldNotExist();
   });
 
-  test("without a held session, points back to creating a Room", async () => {
+  test("without a held session, offers the Room-Code-required helper, not a 404", async () => {
     const driver = createVitestDriver();
     await driver.visit("/room/NOPE12");
 
-    await driver.find(selectors.room.heading("unavailable")).shouldBeVisible();
+    await driver.find(selectors.room.heading("codeRequired")).shouldBeVisible();
+    await driver.find(selectors.app.notFound).shouldNotExist();
     await driver.find(selectors.room.createNew).shouldBeVisible();
+  });
+
+  test("the Room-Code-required helper joins with the code prefilled from the URL", async () => {
+    const driver = createVitestDriver();
+    await driver.visit("/room/NOPE12");
+
+    await driver.find(selectors.room.joinWithCode).click();
+
+    // Lands on the Join Room entry with the code carried over from the link.
+    await driver.find(selectors.joinRoom.heading).shouldBeVisible();
+    await driver.find(selectors.joinRoom.input).shouldHaveValue("NOPE12");
   });
 
   test("populates the Transfer Log from the room.transfers history on mount", async () => {

@@ -110,7 +110,7 @@ export function RoomShareView({
     return (
       <TerminalNotice
         title="Room expired"
-        message="This Room has expired. Create a new Room to send files."
+        message="This Room reached its Expiry — every Transfer in it is gone. Create a new Room to send more."
       />
     );
   }
@@ -178,7 +178,9 @@ export function RoomShareView({
               onActiveChange={setSenderUploading}
             />
           )}
-          <TextPasteField onSend={handleSend} />
+          {/* Past the Expiry the Room is held open only to land an in-flight
+              Transfer — seal the composer so nothing new goes into a dead Room. */}
+          <TextPasteField onSend={handleSend} disabled={expired} />
         </footer>
       </main>
 
