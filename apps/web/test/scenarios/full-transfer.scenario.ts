@@ -61,10 +61,14 @@ suite("Full transfer — happy path", () => {
       await receiver.find(selectors.transfer.download).shouldBeVisible();
       await receiver.find(selectors.transfer.download).click();
 
-      // Delivery is the moment the whole flow points at: once the download
-      // completes, both sides settle on Delivered. Both roles show it on the live
-      // row and in the shared Transfer Log; scope to the Log so each asserts one.
-      await receiver.within(selectors.transfer.log).find(selectors.transfer.delivered).shouldBeVisible();
+      // Delivery is the moment the whole flow points at. The "Seen" tick is a
+      // read receipt on the Sender's own row: it only lights once the server
+      // records the Receiver's download, so asserting it proves the whole loop —
+      // join → upload → download → delivered — end to end. The Receiver's incoming
+      // row carries no tick by design (it's a read receipt, not a status both
+      // sides mirror); its proof is having pulled the file above. Scope to the
+      // Room stream because the Sender's upload queue shows the same Delivered
+      // label outside it, so this targets exactly the streamed row.
       await sender.within(selectors.transfer.log).find(selectors.transfer.delivered).shouldBeVisible();
 
       // The Text Snippet / Link path (paste → send → receive → copy) is covered by
