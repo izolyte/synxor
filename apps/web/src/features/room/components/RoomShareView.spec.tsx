@@ -355,9 +355,7 @@ suite("RoomShareView", () => {
     await screen.find({ role: "button", name: "closed" }).click();
 
     await screen.find(selectors.room.heading("closed")).shouldBeVisible();
-    await screen
-      .find({ text: "The Sender closed this Room. Create a new Room to send files." })
-      .shouldBeVisible();
+    await screen.find(selectors.room.closedMessage).shouldBeVisible();
   });
 
   test("a Receiver has no Delete Room control", async () => {
