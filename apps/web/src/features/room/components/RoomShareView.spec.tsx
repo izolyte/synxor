@@ -371,7 +371,7 @@ suite("RoomShareView", () => {
     await screen.find(selectors.room.waiting).shouldNotExist();
   });
 
-  test("a Sender can delete the Room, emitting the close over the socket", async () => {
+  test("a Sender can delete the Room from the kebab menu, emitting the close over the socket", async () => {
     const socket = new FakeSocket();
     const factory = () => socket as unknown as Socket;
     const screen = await renderRouted(() => (
@@ -383,6 +383,10 @@ suite("RoomShareView", () => {
         socketFactory={factory}
       />
     ));
+
+    // Delete Room lives behind the header's overflow menu, not in the primary chrome.
+    await screen.find(selectors.room.deleteRoom).shouldNotExist();
+    await screen.find(selectors.room.menu).click();
 
     await screen.find(selectors.room.deleteRoom).click();
     await screen.find(selectors.room.confirmDelete).shouldBeVisible();
@@ -416,10 +420,49 @@ suite("RoomShareView", () => {
     await screen.find(selectors.room.closedMessage).shouldBeVisible();
   });
 
-  test("a Receiver has no Delete Room control", async () => {
+  test("a Receiver has no kebab and no Delete Room control", async () => {
     const screen = renderComponent(
       <RoomShareView roomCode="ABC123" expiresAt={undefined} role="receiver" />,
     );
+    await screen.find(selectors.room.menu).shouldNotExist();
     await screen.find(selectors.room.deleteRoom).shouldNotExist();
+  });
+
+  test("the glass header carries the Room Code, countdown pill and the Sender's kebab", async () => {
+    const socket = new FakeSocket();
+    const factory = () => socket as unknown as Socket;
+    const expiresAt = new Date(Date.now() + 2 * DAY + 3 * HOUR + 30 * MINUTE).toISOString();
+    const screen = renderComponent(
+      <>
+        <button onClick={() => socket.emit("connect")}>connect</button>
+        <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: 1 })}>join</button>
+        <RoomShareView
+          roomCode="ABC123"
+          expiresAt={expiresAt}
+          token="tok"
+          role="sender"
+          socketFactory={factory}
+        />
+      </>,
+    );
+
+    // Once someone's here the bar shows the Code (while alone the big share Code owns it).
+    await screen.find({ role: "button", name: "connect" }).click();
+    await screen.find({ role: "button", name: "join" }).click();
+
+    await screen.find(selectors.room.code("ABC123")).shouldBeVisible();
+    await screen.find({ text: "Expires in 2d 3h" }).shouldBeVisible();
+    await screen.find(selectors.room.menu).shouldBeVisible();
+  });
+
+  test("the composer is a single bar with an attach button, a send button and key hints", async () => {
+    const screen = renderComponent(
+      <RoomShareView roomCode="ABC123" expiresAt={undefined} role="sender" />,
+    );
+
+    await screen.find(selectors.transfer.compose).shouldBeVisible();
+    await screen.find({ role: "button", name: "Attach a file" }).shouldBeVisible();
+    await screen.find(selectors.transfer.send).shouldBeVisible();
+    await screen.find({ text: "send" }).shouldBeVisible();
   });
 });

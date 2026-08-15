@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Wordmark } from "~/shared/components/Wordmark";
-import { CopyButton } from "~/features/room/components/CopyButton";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeftRight } from "lucide-react";
 import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
 import { PresenceCluster } from "~/features/room/components/PresenceCluster";
@@ -11,6 +10,7 @@ import { DropZone } from "~/features/room/components/DropZone";
 import { TextPasteField } from "~/features/room/components/TextPasteField";
 import { SelfIdentity } from "~/features/room/components/SelfIdentity";
 import { RoomStream } from "~/features/room/components/RoomStream";
+import { RoomMenu } from "~/features/room/components/RoomMenu";
 import { TypingIndicator } from "~/features/room/components/TypingIndicator";
 import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
 import { ExpiryWarningNotice } from "~/features/room/components/ExpiryWarningNotice";
@@ -107,6 +107,14 @@ export function RoomShareView({
 
   const own = useOwnTransferIds(roomCode);
   const clipboard = useClipboard();
+
+  // Bridge the Drop Zone's file picker to the composer's paperclip: the Drop Zone
+  // owns the queue + input and hands its open function up, the bar triggers it.
+  const pickerRef = useRef<() => void>(() => {});
+  const registerPicker = useCallback((open: () => void) => {
+    pickerRef.current = open;
+  }, []);
+  const openPicker = useCallback(() => pickerRef.current(), []);
   const rows = useTransferLogRows({
     history: transferHistory,
     transfers,
@@ -148,61 +156,46 @@ export function RoomShareView({
   const alone = isSender && !present && status !== "lost";
 
   return (
-    <div className="min-h-dvh bg-background">
-      <main className="mx-auto flex min-h-dvh w-full max-w-[var(--width-content)] flex-col px-4">
-        <header className="flex shrink-0 flex-col gap-3 border-b border-[var(--border)] py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex flex-col gap-1">
-              <Wordmark>synxor</Wordmark>
-              <h1 className="text-foreground text-xl font-bold tracking-[var(--tracking-tight)]">
-                Room ready
-              </h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <PresenceCluster roster={roster} self={self} />
-              {isSender && <DeleteRoomControl onClose={closeRoom} />}
-            </div>
-          </div>
+    <div className="flex min-h-dvh flex-col bg-background">
+      <main className="mx-auto flex min-h-dvh w-full max-w-[var(--width-content)] flex-col">
+        {/* The page's heading for the document outline; the visible chrome is the
+            glass bar below, whose code + status carry the same information. */}
+        <h1 className="sr-only">Room ready</h1>
 
-          {/* Once someone's here (or on a Receiver's own session) the header carries
-              the code and copy actions; while alone they live in the share surface
-              below, so nothing's shown twice. */}
-          {!alone && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <span
-                aria-label={`Room Code: ${roomCode.split("").join(" ")}`}
-                className="text-foreground select-all font-mono text-lg font-bold tracking-[var(--tracking-wide)]"
-              >
-                {roomCode}
-              </span>
-              <div className="flex gap-2">
-                <CopyButton
-                  value={roomCode}
-                  label="Copy code"
-                  copiedLabel="Copied"
-                  errorLabel="Couldn't copy — select the code above and copy it manually."
-                />
-                <CopyButton
-                  value={joinUrl}
-                  label="Copy link"
-                  copiedLabel="Link copied"
-                  errorLabel="Couldn't copy the link — select it manually:"
-                  fallbackText={joinUrl}
-                  variant="outline"
-                />
-              </div>
-            </div>
+        {/* The glassy header bar: brand mark, the Room Code + status, the countdown
+            pill, the presence cluster, and the overflow menu. */}
+        <header className="sticky top-0 z-[var(--z-sticky)] flex items-center gap-2.5 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--color-background)_74%,transparent)] px-3 py-2.5 backdrop-blur-[14px] backdrop-saturate-150">
+          <RoomBrandMark />
+          <div className="flex min-w-0 flex-col leading-tight">
+            {/* While alone the big Code owns the share surface below, so the bar
+                shows the wordmark instead of repeating it. */}
+            <span className="truncate font-mono text-sm font-medium tracking-[var(--tracking-wide)] text-[var(--color-ink)]">
+              {alone ? "synxor" : roomCode}
+            </span>
+            <span className="truncate font-mono text-[0.625rem] tracking-[var(--tracking-wide)] text-[var(--color-ink-subtle)]">
+              {alone ? "waiting · no account" : "no account"}
+            </span>
+          </div>
+          <span className="flex-1" />
+          {countdown && <CountdownLine label={countdown.label} phase={countdown.phase} />}
+          <PresenceCluster roster={roster} self={self} />
+          {isSender && (
+            <RoomMenu>
+              <DeleteRoomControl onClose={closeRoom} />
+            </RoomMenu>
           )}
-
-          <div className="flex flex-col gap-1">
-            {countdown && <CountdownLine label={countdown.label} phase={countdown.phase} />}
-            {status === "lost" ? (
-              <ConnectionAlert />
-            ) : (
-              !alone && <ReceiverPresence status={status} receiverCount={receiverCount} />
-            )}
-          </div>
         </header>
+
+        {/* A terminally lost socket is a visible alert with the fix; the live/reconnect
+            presence rides the avatar cluster visually and is announced here for
+            screen readers (role="status"). */}
+        {status === "lost" ? (
+          <div className="px-3 pt-3">
+            <ConnectionAlert />
+          </div>
+        ) : (
+          !alone && <ReceiverPresence status={status} receiverCount={receiverCount} />
+        )}
 
         {alone ? (
           <WaitingForReceiver roomCode={roomCode} joinUrl={joinUrl} status={status} />
@@ -212,32 +205,39 @@ export function RoomShareView({
 
             {/* Ephemeral — sits at the foot of the stream, above the composer, and is
                 never part of the persisted feed. */}
-            <TypingIndicator identities={[...typing.values()]} />
+            <div className="px-3">
+              <TypingIndicator identities={[...typing.values()]} />
+            </div>
           </>
         )}
 
-        <footer className="flex shrink-0 flex-col gap-3 border-t border-[var(--border)] py-3">
-          {/* Two-way transfers: every Participant gets the attach + drop affordance,
-              not just the Sender. */}
-          <DropZone
-            token={socketToken}
-            apiOrigin={apiOrigin}
-            delivered={delivered}
-            uploader={uploader}
-            onActiveChange={setUploading}
-          />
-          <SelfIdentity self={self} onRename={rename} />
-          {/* Past the Expiry the Room is held open only to land an in-flight
-              Transfer — seal the composer so nothing new goes into a dead Room. */}
-          <TextPasteField
-            onSend={handleSend}
-            disabled={expired}
-            // Before anyone's here, the composer invites a first Transfer that'll
-            // be waiting for them on arrival (#99).
-            placeholder={alone ? "Start typing — they'll see it when they arrive…" : undefined}
-            onComposing={composing.notify}
-            onComposingStop={composing.stop}
-          />
+        <footer className="shrink-0 border-t border-[var(--border)] bg-[color-mix(in_oklab,var(--color-background)_78%,transparent)] px-3 py-2.5 backdrop-blur-[14px] backdrop-saturate-150">
+          <div className="flex flex-col gap-2">
+            <SelfIdentity self={self} onRename={rename} />
+            {/* Two-way transfers: every Participant gets the attach + drop affordance,
+                not just the Sender. The Drop Zone hands its picker to the composer's
+                paperclip and shows the queue + drop target. */}
+            <DropZone
+              token={socketToken}
+              apiOrigin={apiOrigin}
+              delivered={delivered}
+              uploader={uploader}
+              onActiveChange={setUploading}
+              registerPicker={registerPicker}
+            />
+            {/* Past the Expiry the Room is held open only to land an in-flight
+                Transfer — seal the composer so nothing new goes into a dead Room. */}
+            <TextPasteField
+              onSend={handleSend}
+              onAttach={openPicker}
+              disabled={expired}
+              // Before anyone's here, the composer invites a first Transfer that'll
+              // be waiting for them on arrival (#99).
+              placeholder={alone ? "Start typing — they'll see it when they arrive…" : undefined}
+              onComposing={composing.notify}
+              onComposingStop={composing.stop}
+            />
+          </div>
         </footer>
       </main>
 
@@ -253,12 +253,23 @@ export function RoomShareView({
   );
 }
 
-// The header presence line once the Room is live — a dot plus words (never colour
-// alone), read as a polite live region so a Sender on a screen reader hears the
-// join/reconnect land. The alone-and-waiting cue is owned by the share surface, so
-// this only speaks up once someone's here or the socket blips. role="status" makes
-// presence flips arriving async over the socket announce instead of passing silently.
-const PRESENCE_ROW = "flex items-center justify-center gap-2 text-sm";
+// The brand mark: the Exchange glyph (two opposed arrows — the two-way transfer)
+// on the primary tile, matching the app icon.
+function RoomBrandMark() {
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-7 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-[var(--color-ink-on-primary)] shadow-[var(--shadow-sm)]"
+    >
+      <ArrowLeftRight size={15} strokeWidth={2.4} />
+    </span>
+  );
+}
+
+// Presence once the Room is live, announced for screen readers — the avatar cluster
+// carries it visually, so this is a polite live region only (role="status"), making
+// join/reconnect flips arriving async over the socket announce instead of passing
+// silently. The alone-and-waiting cue is owned by the share surface.
 function ReceiverPresence({
   status,
   receiverCount,
@@ -268,8 +279,7 @@ function ReceiverPresence({
 }) {
   if (status === "disconnected") {
     return (
-      <p role="status" className={`${PRESENCE_ROW} text-muted-foreground`}>
-        <span aria-hidden="true" className="size-3 rounded-full bg-[var(--color-room-empty)]" />
+      <p role="status" className="sr-only">
         Reconnecting…
       </p>
     );
@@ -278,8 +288,7 @@ function ReceiverPresence({
   if (receiverCount === 0) return null;
 
   return (
-    <p role="status" className={`${PRESENCE_ROW} text-foreground`}>
-      <span aria-hidden="true" className="size-3 rounded-full bg-[var(--color-room-live)]" />
+    <p role="status" className="sr-only">
       {receiverCount === 1 ? "Receiver connected" : `${receiverCount} Receivers connected`}
     </p>
   );

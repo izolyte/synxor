@@ -58,6 +58,8 @@ export const copy = {
     createNew: "Start a new Room",
     // The no-session helper's way in: enter the code, prefilled from the link.
     joinWithCode: "Enter a code",
+    // The header overflow (kebab) menu that holds the Sender's teardown control.
+    menu: "Room menu",
     // Sender's teardown control and its two-step confirm.
     deleteRoom: "Delete Room",
     confirmDelete: "Yes, delete",
@@ -165,6 +167,7 @@ export const selectors = {
     } as const satisfies ActionableSelector,
     expiredMessage: { text: copy.room.expiredMessage } as const satisfies ReadonlySelector,
     closedMessage: { text: copy.room.closedMessage } as const satisfies ReadonlySelector,
+    menu: { role: "button", name: copy.room.menu } as const satisfies ActionableSelector,
     deleteRoom: { role: "button", name: copy.room.deleteRoom } as const satisfies ActionableSelector,
     confirmDelete: {
       role: "button",
