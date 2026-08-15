@@ -1,3 +1,5 @@
+import { screen as rtlScreen } from "@testing-library/react";
+import { expect } from "vitest";
 import { renderComponent } from "~test/kit/component";
 import { suite, test } from "~test/kit";
 import { CountdownLine } from "~/features/room/components/CountdownLine";
@@ -7,6 +9,12 @@ suite("CountdownLine", () => {
     const screen = renderComponent(<CountdownLine label="1h 23m" phase="live" />);
 
     await screen.find({ text: "Expires in 1h 23m" }).shouldBeVisible();
+  });
+
+  test("renders in the mono face with tabular figures so ticking seconds hold width", () => {
+    renderComponent(<CountdownLine label="4m 07s" phase="expiring" />);
+
+    expect(rtlScreen.getByText("Expiring soon · 4m 07s")).toHaveClass("font-mono", "tabular-nums");
   });
 
   test("warns and marks the phase when expiring", async () => {

@@ -20,8 +20,15 @@ export function useCreateRoom() {
       onSuccess: ({ roomCode, roomToken, expiresAt }) => {
         // Persist the session before navigating; the Room view reads it back by
         // code, so the secret never travels in the URL and the countdown has its
-        // expiry on reload.
-        roomSessionService.store(roomCode, { token: roomToken, expiresAt, role: "sender" });
+        // expiry on reload. createdAt pairs with expiresAt to give the lifespan the
+        // approaching-Expiry warning scales to — near enough now, the server having
+        // set expiresAt moments ago.
+        roomSessionService.store(roomCode, {
+          token: roomToken,
+          expiresAt,
+          createdAt: new Date().toISOString(),
+          role: "sender",
+        });
         navigate({ to: "/room/$roomCode", params: { roomCode } });
       },
     }),

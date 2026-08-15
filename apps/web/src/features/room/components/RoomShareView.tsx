@@ -11,6 +11,7 @@ import { DropZone } from "~/features/room/components/DropZone";
 import { TextPasteField } from "~/features/room/components/TextPasteField";
 import { RoomStream } from "~/features/room/components/RoomStream";
 import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
+import { ExpiryWarningNotice } from "~/features/room/components/ExpiryWarningNotice";
 import { DeleteRoomControl } from "~/features/room/components/DeleteRoomControl";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket, type SocketFactory } from "~/features/room/hooks/useRoomSocket";
@@ -34,12 +35,15 @@ import { buildUrl } from "~/shared/utils/url";
  * column so the composer can pin to the bottom.
  *
  * `expiresAt` is absent for a Receiver's session (its join response carries no
- * expiry); the countdown then simply doesn't render. `socketFactory` / `uploader`
- * are test seams; production leaves them undefined and dials the real server.
+ * expiry); the countdown then simply doesn't render. `createdAt` pairs with it to
+ * scale the approaching-Expiry warning to the Room's lifespan. `socketFactory` /
+ * `uploader` are test seams; production leaves them undefined and dials the real
+ * server.
  */
 export function RoomShareView({
   roomCode,
   expiresAt,
+  createdAt,
   token,
   role = "sender",
   socketFactory,
@@ -48,6 +52,7 @@ export function RoomShareView({
 }: {
   roomCode: string;
   expiresAt: string | undefined;
+  createdAt?: string;
   token?: string;
   role?: RoomRole;
   socketFactory?: SocketFactory;
@@ -55,7 +60,7 @@ export function RoomShareView({
   transferHistory?: TransferHistory;
 }) {
   const isSender = role === "sender";
-  const countdown = useCountdown(expiresAt);
+  const countdown = useCountdown(expiresAt, createdAt);
   const expired = countdown?.phase === "expired";
 
   // Expiry never severs a Transfer mid-flight. Past the TTL we hold the Room open
@@ -186,6 +191,9 @@ export function RoomShareView({
 
       {/* The Receiver's big Delivery moment on a completed download. */}
       <DeliveryFlash delivered={delivered} transfers={transfers} />
+
+      {/* One-shot heads-up as the Room nears Expiry — fires once, then clears. */}
+      <ExpiryWarningNotice phase={countdown?.phase} />
     </div>
   );
 }

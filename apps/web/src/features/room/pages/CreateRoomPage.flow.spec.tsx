@@ -34,11 +34,11 @@ suite("Create Room flow", () => {
     // The Room view's heading is the "navigated away" anchor, and waiting on it lets
     // the async mutation, navigation, and the post-mount session read settle.
     await driver.find(selectors.room.heading("ready")).shouldBeVisible();
-    expect(roomSessionService.get("ABC123")).toEqual({
-      token: "tok-success",
-      expiresAt,
-      role: "sender",
-    });
+    // createdAt is stamped live at creation (it scales the expiry warning), so pull
+    // it aside and assert it's a real instant; the rest of the shape is fixed.
+    const { createdAt, ...rest } = roomSessionService.get("ABC123") ?? {};
+    expect(rest).toEqual({ token: "tok-success", expiresAt, role: "sender" });
+    expect(typeof createdAt === "string" && !Number.isNaN(Date.parse(createdAt))).toBe(true);
     await driver.find(selectors.createRoom.heading).shouldNotExist();
   });
 
