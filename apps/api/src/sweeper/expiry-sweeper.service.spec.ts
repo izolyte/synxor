@@ -1,6 +1,7 @@
 import { InMemoryRoomRepository } from '../domain/room/room.repository.fake';
 import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
 import { FakeDeliveryRepository } from '../domain/delivery/delivery.repository.fake';
+import { InMemoryParticipantRepository } from '../domain/participant/participant.repository.fake';
 import { FakeObjectStorage } from '../domain/storage/object-storage.fake';
 import { RoomService } from '../room/room.service';
 import type { UploadSession, UploadSessionStore } from '../domain/transfer/upload-session';
@@ -58,6 +59,7 @@ describe('ExpirySweeperService', () => {
       { sign: () => 'unused' },
       transfers,
       new FakeDeliveryRepository(),
+      new InMemoryParticipantRepository(),
       storage,
     );
     sweeper = new ExpirySweeperService(rooms, transfers, storage, sessions, roomService);

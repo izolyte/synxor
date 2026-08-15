@@ -11,29 +11,35 @@ import { sessionRole } from "~/features/room/services/room-session.service";
 const route = getRouteApi("/room/$roomCode");
 
 /**
- * Sender Room view: resolves the per-tab session for the code, then shows the share
- * view, the missing-session notice, or a brief neutral shell while it resolves.
+ * Room view: resolves the per-tab session for the code, then shows the live Room
+ * stream, the missing-session notice, or a brief neutral shell while it resolves.
+ * The live Room owns a full-height shell; the loading and unavailable states keep
+ * the app's centered narrow layout.
  */
 export function RoomPage() {
   const { roomCode } = route.useParams();
   const session = useRoomSession(roomCode);
-  // Fetched at the route so the Transfer Log's history rides the router's query
-  // context; RoomShareView (also rendered bare in tests) takes it as a prop.
+  // Fetched at the route so the stream's history rides the router's query context;
+  // RoomShareView (also rendered bare in tests) takes it as a prop.
   const transferHistory = useRoomTransferHistory(roomCode);
+
+  if (session.status === "ready") {
+    return (
+      <RoomShareView
+        roomCode={roomCode}
+        expiresAt={session.session.expiresAt}
+        token={session.session.token}
+        role={sessionRole(session.session)}
+        transferHistory={transferHistory}
+      />
+    );
+  }
 
   return (
     <CenteredScreen>
       <ScreenColumn>
         {session.status === "loading" ? (
           <ScreenHeader title="Room" description="Preparing Room…" />
-        ) : session.status === "ready" ? (
-          <RoomShareView
-            roomCode={roomCode}
-            expiresAt={session.session.expiresAt}
-            token={session.session.token}
-            role={sessionRole(session.session)}
-            transferHistory={transferHistory}
-          />
         ) : (
           <RoomNotice
             title="Room unavailable"

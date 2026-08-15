@@ -27,6 +27,11 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
     return [...this.stored.values()].filter((p) => p.roomId === roomId);
   }
 
+  async findByIds(ids: string[]): Promise<Participant[]> {
+    const wanted = new Set(ids);
+    return [...this.stored.values()].filter((p) => wanted.has(p.id));
+  }
+
   async setDisconnected(id: string, at: Date): Promise<Participant> {
     const participant = this.stored.get(id);
     if (!participant) throw new Error(`Participant not found: ${id}`);

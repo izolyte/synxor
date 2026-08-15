@@ -20,8 +20,6 @@ import type { Uploader } from "~/features/room/hooks/useFileUploads";
 
 type Handler = (payload?: unknown) => void;
 
-// Minimal socket + Manager doubles, matching useRoomSocket.spec: the Harness
-// buttons fire events inside act() to drive the view the way a real server would.
 class FakeManager {
   private readonly handlers = new Map<string, Handler>();
   on(event: string, cb: Handler): this {
@@ -53,14 +51,22 @@ class FakeSocket {
   disconnect(): this {
     return this;
   }
-  emit(event: string, payload?: unknown): void {
+  emit(event: string, ...args: unknown[]): void {
     this.sent.push(event);
-    // A trailing callback is a request for the server ack (closeRoom); resolve ok.
-    if (typeof payload === "function") {
-      (payload as (ack: unknown) => void)({ ok: true });
+    // socket.io puts an ack callback last; text send and close both use one.
+    const ack = typeof args[args.length - 1] === "function" ? args.pop() : undefined;
+    if (ack) {
+      (ack as (a: unknown) => void)(this.ackFor(event, args[0]));
       return;
     }
-    this.handlers.get(event)?.(payload);
+    this.handlers.get(event)?.(args[0]);
+  }
+  private ackFor(event: string, payload: unknown): unknown {
+    if (event === TransferEvent.SendText) {
+      const text = (payload as { text: string }).text;
+      return { transferId: "s1", payloadType: "TEXT_SNIPPET", content: text };
+    }
+    return { ok: true };
   }
 }
 
@@ -75,9 +81,7 @@ function progress(receivedChunks: number, complete: boolean): TransferProgressPa
   };
 }
 
-// The sealed Room renders RoomNotice's <Link to="/">, which needs a Router in the
-// tree. A minimal one-route router provides it — same render-then-load shape the
-// Vitest Driver uses — without pulling in the whole app.
+// A minimal one-route router for views that render a <Link>/useNavigate.
 async function renderRouted(component: () => ReactNode) {
   const rootRoute = createRootRoute();
   const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component });
@@ -92,8 +96,6 @@ async function renderRouted(component: () => ReactNode) {
 
 suite("RoomShareView", () => {
   test("shows the code, both copy actions, the countdown and waiting state", async () => {
-    // Day-scale expiry → "2d 3h"; the +30m buffer keeps the hours floor stable
-    // against the few ms that elapse before the countdown reads the clock.
     const expiresAt = new Date(Date.now() + 2 * DAY + 3 * HOUR + 30 * MINUTE).toISOString();
     const screen = renderComponent(<RoomShareView roomCode="ABC123" expiresAt={expiresAt} />);
 
@@ -110,27 +112,54 @@ suite("RoomShareView", () => {
 
     await screen.find(selectors.room.heading("ready")).shouldBeVisible();
     await screen.find(selectors.room.code("ABC123")).shouldBeVisible();
-    await screen.find(selectors.room.copyCode).shouldBeVisible();
     await screen.find(selectors.room.waiting).shouldBeVisible();
+  });
+
+  test("a Sender gets the composer", async () => {
+    const screen = renderComponent(
+      <RoomShareView roomCode="ABC123" expiresAt={undefined} role="sender" />,
+    );
+    await screen.find(selectors.transfer.compose).shouldBeVisible();
+  });
+
+  test("a Receiver gets the composer too", async () => {
+    const screen = renderComponent(
+      <RoomShareView roomCode="ABC123" expiresAt={undefined} role="receiver" />,
+    );
+    await screen.find(selectors.transfer.compose).shouldBeVisible();
   });
 
   test("a Sender gets the Drop Zone", async () => {
     const screen = renderComponent(
       <RoomShareView roomCode="ABC123" expiresAt={undefined} role="sender" />,
     );
-
     await screen.find({ testId: "drop-zone" }).shouldBeVisible();
   });
 
-  test("a Receiver gets the incoming feed instead of the Drop Zone", async () => {
+  test("a Receiver does not get the Drop Zone", async () => {
     const screen = renderComponent(
       <RoomShareView roomCode="ABC123" expiresAt={undefined} role="receiver" />,
     );
-
-    await screen
-      .find({ text: "Files, text, and links the Sender shares will appear here." })
-      .shouldBeVisible();
     await screen.find({ testId: "drop-zone" }).shouldNotExist();
+  });
+
+  test("a Participant can send a message and see it in the stream", async () => {
+    const socket = new FakeSocket();
+    const factory = () => socket as unknown as Socket;
+    const screen = renderComponent(
+      <RoomShareView
+        roomCode="ABC123"
+        expiresAt={undefined}
+        token="tok"
+        role="receiver"
+        socketFactory={factory}
+      />,
+    );
+
+    await screen.find(selectors.transfer.compose).type("ping from a Receiver{Enter}");
+
+    await screen.find({ text: "ping from a Receiver" }).shouldBeVisible();
+    expect(socket.sent).toContain(TransferEvent.SendText);
   });
 
   test("holds an expired Room open until the in-flight Transfer lands, then seals", async () => {
@@ -166,13 +195,10 @@ suite("RoomShareView", () => {
     await screen.find({ role: "button", name: "start" }).click();
     await screen.find({ testId: "drop-zone" }).shouldBeVisible();
 
-    // TTL runs out mid-Transfer: the Room holds instead of collapsing, and the
-    // countdown reads the sealing state rather than a zero.
     await screen.find({ role: "button", name: "run-out" }).click();
     await screen.find({ text: "Expiring…" }).shouldBeVisible();
     await screen.find({ testId: "drop-zone" }).shouldBeVisible();
 
-    // The Transfer completes → the Room seals.
     await screen.find({ role: "button", name: "finish" }).click();
     await screen
       .find({ text: "This Room has expired. Create a new Room to send files." })
@@ -181,12 +207,7 @@ suite("RoomShareView", () => {
   });
 
   test("holds an expired Room open while the Sender's own upload is still in flight", async () => {
-    // The upload has started locally but the server hasn't broadcast its first
-    // progress yet, so the socket `transfers` feed is still empty. The sealing
-    // window must key off DropZone's local upload state, or the Room would seal
-    // and unmount the upload it was meant to protect.
     const socket = new FakeSocket();
-    // Parks each upload so it stays in the "uploading" phase until we release it.
     const pending: Array<() => void> = [];
     const uploader: Uploader = () =>
       new Promise((resolve) =>
@@ -219,18 +240,14 @@ suite("RoomShareView", () => {
     const screen = await renderRouted(Uploading);
     await screen.find({ role: "button", name: "connect" }).click();
 
-    // Start a local upload; deliberately emit no socket progress event.
     fireEvent.change(rtlScreen.getByTestId("drop-zone-input"), {
       target: { files: [new File(["x"], "a.txt", { type: "text/plain" })] },
     });
     await screen.find({ text: "a.txt" }).shouldBeVisible();
 
-    // TTL runs out with only the local upload in flight: the Room must hold, not
-    // seal and unmount the Drop Zone.
     await screen.find({ role: "button", name: "run-out" }).click();
     await screen.find({ testId: "drop-zone" }).shouldBeVisible();
 
-    // Upload finishes → nothing left in flight → the Room seals.
     await act(async () => pending[0]());
     await screen
       .find({ text: "This Room has expired. Create a new Room to send files." })
@@ -260,7 +277,6 @@ suite("RoomShareView", () => {
 
     await screen.find({ text: "Lost connection. Refresh to continue." }).shouldBeVisible();
     expect(rtlScreen.getByRole("alert")).toBeVisible();
-    // The stale presence line yields to the alert.
     await screen.find(selectors.room.waiting).shouldNotExist();
   });
 
@@ -277,7 +293,6 @@ suite("RoomShareView", () => {
       />
     ));
 
-    // First click only arms the confirm — nothing is sent yet.
     await screen.find(selectors.room.deleteRoom).click();
     await screen.find(selectors.room.confirmDelete).shouldBeVisible();
     expect(socket.sent).not.toContain("room:close");

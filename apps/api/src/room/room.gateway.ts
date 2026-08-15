@@ -54,20 +54,20 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
     this.server.to(roomId).emit(event, payload);
   }
 
-  // The Sender submits a Text Snippet / Link; the server classifies it, persists
-  // it, then broadcasts to the rest of the Room. Persistence comes first so the
-  // Transfer Log can hydrate it on reload/late-join — the transferId is the
-  // persisted row's id, shared by the ack and the broadcast so both sides key on
-  // the same value. The ack returns that id (or a reason) to the emitting client.
+  // Any Participant submits a Text Snippet / Link; the server classifies it,
+  // persists it with its author, then broadcasts to the rest of the Room.
+  // Persistence comes first so the stream can hydrate it on reload/late-join —
+  // the transferId is the persisted row's id, shared by the ack and the broadcast
+  // so both sides key on the same value. The ack returns the classified row to
+  // the author (their own send is never broadcast back to them).
   @SubscribeMessage(TransferEvent.SendText)
   async handleSendText(
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: unknown,
   ): Promise<TransferTextAck> {
     const info = this.connected.get(socket.id);
-    if (!info || info.role !== 'SENDER') {
-      return { error: 'Only the Sender may send text' };
-    }
+    if (!info) return { error: 'Join the Room before sending' };
+
     const parsed = sendTextSchema.safeParse(body);
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? 'Invalid text payload' };
@@ -76,30 +76,36 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
 
     let transferId: string;
     try {
-      transferId = await this.persistText(info.roomId, payloadType, content);
+      transferId = await this.persistText(info, payloadType, content);
     } catch (err) {
       this.logger.error(`Failed to persist text transfer for Room ${info.roomId}`, err);
       return { error: 'Could not send — try again' };
     }
 
-    const payload: TransferTextPayload = { transferId, payloadType, content };
-    // `socket.to` excludes the Sender — they already have it and get the ack.
+    const payload: TransferTextPayload = {
+      transferId,
+      payloadType,
+      content,
+      author: { role: info.role },
+    };
+    // `socket.to` excludes the author — they already have it and get the ack.
     socket.to(info.roomId).emit(TransferEvent.Text, payload);
-    return { transferId };
+    return { transferId, payloadType, content };
   }
 
   private async persistText(
-    roomId: string,
+    author: ConnectedParticipant,
     payloadType: TransferTextPayload['payloadType'],
     content: string,
   ): Promise<string> {
     // One atomic write — a half-failure can't leave a Transfer row without its
     // TextPayload, which the Log would otherwise hydrate as an empty ghost row.
     const transfer = await this.transfers.createTextTransfer({
-      roomId,
+      roomId: author.roomId,
       payloadType,
       content,
       contentLength: BigInt(Buffer.byteLength(content, 'utf8')),
+      authorParticipantId: author.participantId,
     });
     return transfer.id;
   }

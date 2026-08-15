@@ -8,10 +8,8 @@ import {
   type TransferHistory,
   type TransferLogRow,
 } from "~/features/room/utils/transfer-log";
-import type {
-  TransferProgressPayload,
-  TransferTextPayload,
-} from "~/features/room/constants/transfer";
+import type { RoomText } from "~/features/room/hooks/useRoomSocket";
+import type { TransferProgressPayload } from "~/features/room/constants/transfer";
 
 // Bound to the Room route so the query can read the tRPC proxy from context.
 // Called from RoomPage (route-mounted, providers present), never from a bare
@@ -33,15 +31,19 @@ export function useRoomTransferHistory(roomCode: string): TransferHistory {
 export interface UseTransferLogRowsArgs {
   history: TransferHistory;
   transfers: TransferProgressPayload[];
-  texts: TransferTextPayload[];
+  texts: RoomText[];
   delivered: ReadonlySet<string>;
+  /** transferIds this client sent, to attribute its own hydrated history rows. */
+  ownIds: ReadonlySet<string>;
+  /** Whether this client is the Sender — the only Participant that uploads files. */
+  isSender: boolean;
   /** Live session token; absent (SSR / expired) drops the download links. */
   token: string | undefined;
   apiOrigin: string | undefined;
 }
 
 /**
- * Merges the history snapshot with the live socket feed into the ordered Log
+ * Merges the history snapshot with the live socket feed into the ordered stream
  * rows. Pure of any router/query context, so it composes anywhere the socket
  * state already lives (RoomShareView).
  */
@@ -50,6 +52,8 @@ export function useTransferLogRows({
   transfers,
   texts,
   delivered,
+  ownIds,
+  isSender,
   token,
   apiOrigin,
 }: UseTransferLogRowsArgs): TransferLogRow[] {
@@ -75,9 +79,11 @@ export function useTransferLogRows({
         transfers,
         texts,
         delivered,
+        ownIds,
+        isSender,
         liveTimestamps: seenRef.current,
         downloadHref,
       }),
-    [history, transfers, texts, delivered, downloadHref],
+    [history, transfers, texts, delivered, ownIds, isSender, downloadHref],
   );
 }

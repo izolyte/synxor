@@ -9,10 +9,24 @@ import {
 } from "~/features/room/constants/room-events";
 import {
   TransferEvent,
+  type SendTextAck,
+  type TransferAuthor,
   type TransferDeliveredPayload,
   type TransferProgressPayload,
   type TransferTextPayload,
 } from "~/features/room/constants/transfer";
+
+// A Text Snippet / Link in the live stream, tagged relative to this client:
+// `mine` marks the sender's own optimistic echo (rendered as outgoing, author
+// null — it's "you"); incoming payloads from other Participants carry their
+// author.
+export interface RoomText {
+  transferId: string;
+  payloadType: TransferTextPayload["payloadType"];
+  content: string;
+  author: TransferAuthor | null;
+  mine: boolean;
+}
 
 // "lost" is terminal: socket.io gave up reconnecting. "disconnected" is the
 // recoverable in-between the UI reads as "Reconnecting…".
@@ -23,8 +37,9 @@ export interface RoomSocketState {
   receiverCount: number;
   /** Live Transfers in this Room, ordered by first progress event. */
   transfers: TransferProgressPayload[];
-  /** Text Snippets / Links received over the socket, in arrival order. */
-  texts: TransferTextPayload[];
+  /** Text Snippets / Links in the live stream — this client's own echoed sends
+   *  and other Participants' incoming ones — in arrival order. */
+  texts: RoomText[];
   /** transferIds a Receiver has finished downloading. Drives the delivered
    *  states (Sender row, Receiver row) and the one-shot Delivery flash. */
   delivered: ReadonlySet<string>;
@@ -34,8 +49,11 @@ export interface RoomSocketState {
 }
 
 export interface RoomSocket extends RoomSocketState {
-  /** Sends a Text Snippet / Link to the Room; a no-op until the socket is live. */
-  sendText: (text: string) => void;
+  /** Sends a Text Snippet / Link to the Room and resolves with the server ack.
+   *  On success the classified message is echoed into `texts` as the sender's
+   *  own (their send is never broadcast back). Resolves an error with no live
+   *  socket, so the caller never hangs. */
+  sendText: (text: string) => Promise<SendTextAck>;
   /** Sender-only: closes the Room, kicking every Participant. Resolves with the
    *  server's ack (or an error when there's no live socket). */
   closeRoom: () => Promise<RoomCloseAck>;
@@ -60,6 +78,10 @@ const defaultFactory: SocketFactory = (token) =>
 // How long to wait for the server's close ack before giving up and surfacing an
 // error, so a dropped request never leaves the delete button spinning.
 const CLOSE_ACK_TIMEOUT_MS = 5000;
+
+// Same backstop for a Text/Link send: a dropped ack surfaces an error instead of
+// leaving the composer's send promise pending forever.
+const SEND_ACK_TIMEOUT_MS = 5000;
 
 /**
  * Subscribes to live Room activity — Receiver presence, file progress, and
@@ -106,14 +128,14 @@ export function useRoomSocket(
       });
     };
 
-    // Append each Text/Link once. A resend from the server carries a new
-    // transferId; a duplicate id (retransmit) is ignored.
+    // Append each incoming Text/Link once, tagged as another Participant's. A
+    // resend carries a new transferId; a duplicate id (retransmit) is ignored.
     const onText = (payload: TransferTextPayload) => {
       if (typeof payload?.transferId !== "string") return;
       setState((prev) =>
         prev.texts.some((t) => t.transferId === payload.transferId)
           ? prev
-          : { ...prev, texts: [...prev.texts, payload] },
+          : { ...prev, texts: [...prev.texts, { ...payload, mine: false }] },
       );
     };
 
@@ -161,8 +183,33 @@ export function useRoomSocket(
     };
   }, [token, factory]);
 
-  const sendText = useCallback((text: string) => {
-    socketRef.current?.emit(TransferEvent.SendText, { text });
+  const sendText = useCallback((text: string): Promise<SendTextAck> => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) return Promise.resolve({ error: "No connection" });
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (ack: SendTextAck) => {
+        if (settled) return;
+        settled = true;
+        // Echo the sender's own message into the stream — the server never
+        // broadcasts it back, so this is the only place it lands live. Deduped by
+        // transferId so a late ack can't double it.
+        if ("transferId" in ack) {
+          const mine: RoomText = { ...ack, author: null, mine: true };
+          setState((prev) =>
+            prev.texts.some((t) => t.transferId === mine.transferId)
+              ? prev
+              : { ...prev, texts: [...prev.texts, mine] },
+          );
+        }
+        resolve(ack);
+      };
+      const timer = setTimeout(() => finish({ error: "No response" }), SEND_ACK_TIMEOUT_MS);
+      socket.emit(TransferEvent.SendText, { text }, (ack: SendTextAck) => {
+        clearTimeout(timer);
+        finish(ack ?? { error: "No response" });
+      });
+    });
   }, []);
 
   const closeRoom = useCallback((): Promise<RoomCloseAck> => {

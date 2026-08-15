@@ -5,10 +5,10 @@ import { cn } from "~/shared/utils/cn";
 import { MAX_TEXT_PAYLOAD_CHARS } from "~/features/room/constants/transfer";
 
 /**
- * Sender's Text Snippet / Link composer. Sends on submit (or ⌘/Ctrl+Enter),
- * clearing the field. The server classifies text vs link and delivers it, so
- * this only guards the character limit — over it, the send is blocked with an
- * inline error.
+ * The Room composer, pinned to the bottom of the stream and shown to every
+ * Participant. Enter sends and clears the field; Shift+Enter inserts a newline.
+ * The server classifies text vs link and delivers it, so this only guards the
+ * character limit — over it, the send is blocked with an inline error.
  */
 export function TextPasteField({ onSend }: { onSend: (text: string) => void }) {
   const [text, setText] = useState("");
@@ -34,13 +34,14 @@ export function TextPasteField({ onSend }: { onSend: (text: string) => void }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          // Enter sends; Shift+Enter (and IME composition) fall through to a newline.
+          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             submit();
           }
         }}
-        rows={3}
-        placeholder="Paste text or a link to send"
+        rows={2}
+        placeholder="Type a message, paste text, or a link"
         aria-label="Text or link to send"
         aria-invalid={tooLong || undefined}
         aria-describedby={tooLong ? errorId : undefined}

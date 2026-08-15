@@ -5,6 +5,9 @@ export interface Transfer {
   roomId: string;
   payloadType: PayloadType;
   contentLength: bigint;
+  // The Participant who created it, or null for author-less rows (file uploads,
+  // legacy pre-two-way rows).
+  authorParticipantId: string | null;
   createdAt: Date;
 }
 
@@ -52,4 +55,7 @@ export interface CreateTextTransferInput {
   payloadType: Extract<PayloadType, 'TEXT_SNIPPET' | 'LINK'>;
   content: string;
   contentLength: bigint;
+  // The Participant creating it, for author attribution. Any Participant may send
+  // over the socket, so this is always known here.
+  authorParticipantId: string;
 }

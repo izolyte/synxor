@@ -48,7 +48,8 @@ model Participant {
   joinedAt       DateTime        @default(now())
   disconnectedAt DateTime?
 
-  room Room @relation(fields: [roomId], references: [id])
+  room              Room       @relation(fields: [roomId], references: [id])
+  authoredTransfers Transfer[]
 
   @@index([roomId])
 }
@@ -59,11 +60,17 @@ model Transfer {
   payloadType   PayloadType
   contentLength BigInt
   createdAt     DateTime    @default(now())
+  // Who created this Transfer, for author attribution in the stream. Nullable:
+  // file uploads ride HTTP with no socket Participant, and rows predating
+  // two-way authoring have none. SET NULL on the FK so orphaning an author never
+  // cascades into losing the Transfer itself.
+  authorParticipantId String?
 
-  room        Room         @relation(fields: [roomId], references: [id])
-  filePayload FilePayload?
-  textPayload TextPayload?
-  delivery    Delivery?
+  room              Room         @relation(fields: [roomId], references: [id])
+  authorParticipant Participant? @relation(fields: [authorParticipantId], references: [id], onDelete: SetNull)
+  filePayload       FilePayload?
+  textPayload       TextPayload?
+  delivery          Delivery?
 
   @@index([roomId])
 }

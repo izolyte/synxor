@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { ScreenHeader } from "~/shared/components/ScreenHeader";
-import { RoomCode } from "~/features/room/components/RoomCode";
+import { useCallback, useEffect, useState } from "react";
+import { Wordmark } from "~/shared/components/Wordmark";
+import { CenteredScreen } from "~/shared/components/CenteredScreen";
+import { ScreenColumn } from "~/shared/components/ScreenColumn";
 import { CopyButton } from "~/features/room/components/CopyButton";
 import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
@@ -8,12 +9,12 @@ import { ConnectionAlert } from "~/features/room/components/ConnectionAlert";
 import { RoomNotice } from "~/features/room/components/RoomNotice";
 import { DropZone } from "~/features/room/components/DropZone";
 import { TextPasteField } from "~/features/room/components/TextPasteField";
-import { IncomingTransfers } from "~/features/room/components/IncomingTransfers";
+import { RoomStream } from "~/features/room/components/RoomStream";
 import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
-import { TransferLog } from "~/features/room/components/TransferLog";
 import { DeleteRoomControl } from "~/features/room/components/DeleteRoomControl";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket, type SocketFactory } from "~/features/room/hooks/useRoomSocket";
+import { useOwnTransferIds } from "~/features/room/hooks/useOwnTransferIds";
 import type { Uploader } from "~/features/room/hooks/useFileUploads";
 import { useTransferLogRows } from "~/features/room/hooks/useTransferLog";
 import { useClipboard } from "~/features/room/hooks/useClipboard";
@@ -23,15 +24,18 @@ import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import { buildUrl } from "~/shared/utils/url";
 
 /**
- * Sender's Room view while waiting for a Receiver: the Room Code front and centre,
- * one tap to copy the code or the prefilled join link, and a live expiry countdown.
- * Once expired the whole view collapses to a single next step.
+ * The Room as a two-way stream: every Participant sees one chronological feed of
+ * Text Snippets, Links, and files, and every Participant can add to it through
+ * the pinned composer. Own messages align right, others left. The creator keeps
+ * the destructive controls (Delete Room); the header carries the Room Code to
+ * share, presence, and the expiry countdown.
+ *
+ * A full-height shell — the one screen that breaks the app's centered narrow
+ * column so the composer can pin to the bottom.
  *
  * `expiresAt` is absent for a Receiver's session (its join response carries no
- * expiry); the countdown then simply doesn't render.
- *
- * `socketFactory` is a test seam (mirrors DropZone's `uploader`): production leaves
- * it undefined and useRoomSocket dials the real server.
+ * expiry); the countdown then simply doesn't render. `socketFactory` / `uploader`
+ * are test seams; production leaves them undefined and dials the real server.
  */
 export function RoomShareView({
   roomCode,
@@ -47,11 +51,10 @@ export function RoomShareView({
   token?: string;
   role?: RoomRole;
   socketFactory?: SocketFactory;
-  /** Test seam forwarded to DropZone; production uses the real chunked uploader. */
   uploader?: Uploader;
-  /** Persisted Transfer history for the Log, fetched by the route (RoomPage). */
   transferHistory?: TransferHistory;
 }) {
+  const isSender = role === "sender";
   const countdown = useCountdown(expiresAt);
   const expired = countdown?.phase === "expired";
 
@@ -63,34 +66,40 @@ export function RoomShareView({
   const socketToken = sealed ? undefined : token;
   const { status, receiverCount, transfers, texts, delivered, closed, sendText, closeRoom } =
     useRoomSocket(socketToken, socketFactory);
-  // Same origin the socket rides; only resolved with a live token (client-only).
   const apiOrigin = socketToken ? resolveApiOrigin(import.meta.env) : undefined;
 
-  // `transfers` is the whole-Room socket feed, which covers a Receiver's download
-  // but NOT a Sender's own upload until the server echoes its first progress
-  // broadcast — so fold in DropZone's local upload state, or a file dropped in
-  // the last RTT before expiry could seal the Room mid-upload.
   const [senderUploading, setSenderUploading] = useState(false);
   const transferActive = transfers.some((t) => !t.complete) || senderUploading;
   useEffect(() => {
     if (expired && !transferActive) setSealed(true);
   }, [expired, transferActive]);
 
+  const own = useOwnTransferIds(roomCode);
   const clipboard = useClipboard();
-  const logRows = useTransferLogRows({
+  const rows = useTransferLogRows({
     history: transferHistory,
     transfers,
     texts,
     delivered,
+    ownIds: own.ids,
+    isSender,
     token: socketToken,
     apiOrigin,
   });
 
-  // The Sender closed the Room out from under everyone still in it — terminal,
-  // and it wins over the expiry/sealed states below.
+  // Record the id the server minted so this message stays attributed to us across
+  // a reload — the server never broadcasts our own send back to us.
+  const handleSend = useCallback(
+    async (text: string) => {
+      const ack = await sendText(text);
+      if ("transferId" in ack) own.add(ack.transferId);
+    },
+    [sendText, own],
+  );
+
   if (closed) {
     return (
-      <RoomNotice
+      <TerminalNotice
         title="Room closed"
         message="The Sender closed this Room. Create a new Room to send files."
       />
@@ -99,7 +108,7 @@ export function RoomShareView({
 
   if (sealed || (expired && !transferActive)) {
     return (
-      <RoomNotice
+      <TerminalNotice
         title="Room expired"
         message="This Room has expired. Create a new Room to send files."
       />
@@ -109,74 +118,84 @@ export function RoomShareView({
   const joinUrl = buildUrl("/join", { code: roomCode });
 
   return (
-    <>
-      <ScreenHeader
-        title="Room ready"
-        description="Share the Room Code or link to invite a Receiver."
-      />
+    <div className="min-h-dvh bg-background">
+      <main className="mx-auto flex min-h-dvh w-full max-w-[var(--width-content)] flex-col px-4">
+        <header className="flex shrink-0 flex-col gap-3 border-b border-[var(--border)] py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <Wordmark>synxor</Wordmark>
+              <h1 className="text-foreground text-xl font-bold tracking-[var(--tracking-tight)]">
+                Room ready
+              </h1>
+            </div>
+            {isSender && <DeleteRoomControl onClose={closeRoom} />}
+          </div>
 
-      <RoomCode code={roomCode} receiverCount={receiverCount} />
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span
+              aria-label={`Room Code: ${roomCode.split("").join(" ")}`}
+              className="text-foreground select-all font-mono text-lg font-bold tracking-[var(--tracking-wide)]"
+            >
+              {roomCode}
+            </span>
+            <div className="flex gap-2">
+              <CopyButton
+                value={roomCode}
+                label="Copy code"
+                copiedLabel="Copied"
+                errorLabel="Couldn't copy — select the code above and copy it manually."
+              />
+              <CopyButton
+                value={joinUrl}
+                label="Copy link"
+                copiedLabel="Link copied"
+                errorLabel="Couldn't copy the link — select it manually:"
+                fallbackText={joinUrl}
+                variant="outline"
+              />
+            </div>
+          </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <CopyButton
-          value={roomCode}
-          label="Copy code"
-          copiedLabel="Copied"
-          errorLabel="Couldn't copy — select the code above and copy it manually."
-        />
-        <CopyButton
-          value={joinUrl}
-          label="Copy link"
-          copiedLabel="Link copied"
-          errorLabel="Couldn't copy the link — select it manually:"
-          fallbackText={joinUrl}
-          variant="outline"
-        />
-      </div>
+          <div className="flex flex-col gap-1">
+            {countdown && <CountdownLine label={countdown.label} phase={countdown.phase} />}
+            {status === "lost" ? (
+              <ConnectionAlert />
+            ) : (
+              <WaitingForReceiver status={status} receiverCount={receiverCount} />
+            )}
+          </div>
+        </header>
 
-      {/* Ambient status, grouped tighter than the action rhythm above it. A
-          terminally lost socket takes over the presence slot: the count is stale,
-          and the one thing that helps now is a refresh. */}
-      <div className="flex flex-col gap-2">
-        {countdown && <CountdownLine label={countdown.label} phase={countdown.phase} />}
-        {status === "lost" ? (
-          <ConnectionAlert />
-        ) : (
-          <WaitingForReceiver status={status} receiverCount={receiverCount} />
-        )}
-      </div>
+        <RoomStream rows={rows} onCopy={clipboard.copy} />
 
-      {role === "sender" ? (
-        <div className="flex flex-col gap-3">
-          <DropZone
-            token={socketToken}
-            apiOrigin={apiOrigin}
-            delivered={delivered}
-            uploader={uploader}
-            onActiveChange={setSenderUploading}
-          />
-          <TextPasteField onSend={sendText} />
-        </div>
-      ) : (
-        <>
-          <IncomingTransfers
-            transfers={transfers}
-            texts={texts}
-            token={socketToken}
-            apiOrigin={apiOrigin}
-            delivered={delivered}
-          />
-          {/* Receiver-only: the big confirmation moment. The Sender reads Delivery
-              off its own file rows above, not a full-screen flash. */}
-          <DeliveryFlash delivered={delivered} transfers={transfers} />
-        </>
-      )}
+        <footer className="flex shrink-0 flex-col gap-3 border-t border-[var(--border)] py-3">
+          {isSender && (
+            <DropZone
+              token={socketToken}
+              apiOrigin={apiOrigin}
+              delivered={delivered}
+              uploader={uploader}
+              onActiveChange={setSenderUploading}
+            />
+          )}
+          <TextPasteField onSend={handleSend} />
+        </footer>
+      </main>
 
-      {/* Shared history + live feed, for both roles. */}
-      <TransferLog rows={logRows} onCopy={clipboard.copy} />
+      {/* The Receiver's big Delivery moment on a completed download. */}
+      <DeliveryFlash delivered={delivered} transfers={transfers} />
+    </div>
+  );
+}
 
-      {/* Sender-only teardown, parked at the edge away from the send flow. */}
-      {role === "sender" && <DeleteRoomControl onClose={closeRoom} />}
-    </>
+// Terminal Room states keep the app's centered narrow layout — only the live Room
+// takes over the full-height shell.
+function TerminalNotice({ title, message }: { title: string; message: string }) {
+  return (
+    <CenteredScreen>
+      <ScreenColumn>
+        <RoomNotice title={title} message={message} />
+      </ScreenColumn>
+    </CenteredScreen>
   );
 }

@@ -49,15 +49,16 @@ class FakeSocket {
   disconnect(): this {
     return this;
   }
-  emit(event: string, payload?: unknown): void {
-    this.sent.push({ event, payload });
-    // socket.io calls a trailing callback with the server ack; mirror that so
-    // closeRoom resolves.
-    if (typeof payload === "function") {
-      (payload as (ack: unknown) => void)(this.nextAck);
+  emit(event: string, ...args: unknown[]): void {
+    // socket.io puts a trailing ack callback after the payload; mirror that so
+    // closeRoom and sendText resolve. Record the payload (first non-callback arg).
+    const ack = typeof args[args.length - 1] === "function" ? args.pop() : undefined;
+    this.sent.push({ event, payload: args[0] });
+    if (ack) {
+      (ack as (a: unknown) => void)(this.nextAck);
       return;
     }
-    this.handlers.get(event)?.(payload);
+    this.handlers.get(event)?.(args[0]);
   }
 }
 
@@ -103,7 +104,7 @@ function Harness({
       <output data-testid="texts">
         {texts.length === 0
           ? "none"
-          : texts.map((t) => `${t.payloadType}:${t.content}`).join(" ")}
+          : texts.map((t) => `${t.mine ? "me" : "them"}:${t.payloadType}:${t.content}`).join(" ")}
       </output>
       <button
         onClick={() =>
@@ -116,7 +117,7 @@ function Harness({
       >
         recv-text
       </button>
-      <button onClick={() => sendText("hello world")}>send-text</button>
+      <button onClick={() => void sendText("hello world")}>send-text</button>
       <button onClick={() => socket.emit("connect")}>connect</button>
       <button onClick={() => socket.emit("disconnect")}>drop</button>
       <button onClick={() => socket.emit("connect_error")}>fail</button>
@@ -249,12 +250,24 @@ suite("useRoomSocket", () => {
     await screen.find({ testId: "status" }).shouldHaveText("connecting");
   });
 
-  test("appends an incoming Text/Link payload", async () => {
+  test("appends an incoming Text/Link payload, tagged as another Participant's", async () => {
     const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
 
     await screen.find({ role: "button", name: "recv-text" }).click();
 
-    await screen.find({ testId: "texts" }).shouldHaveText("LINK:https://example.com");
+    await screen.find({ testId: "texts" }).shouldHaveText("them:LINK:https://example.com");
+  });
+
+  test("sendText echoes the classified message back as this client's own", async () => {
+    const socket = new FakeSocket();
+    socket.nextAck = { transferId: "e1", payloadType: "TEXT_SNIPPET", content: "echoed" };
+    const screen = renderComponent(<Harness token="tok" socket={socket} />);
+
+    await screen.find({ role: "button", name: "send-text" }).click();
+
+    // The server never broadcasts the sender's own message back, so the ack echo
+    // is the only place it lands — as "me".
+    await screen.find({ testId: "texts" }).shouldHaveText("me:TEXT_SNIPPET:echoed");
   });
 
   test("records a transfer:delivered once, ignoring a replayed duplicate", async () => {

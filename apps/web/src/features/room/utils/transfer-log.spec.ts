@@ -1,10 +1,8 @@
 import { expect } from "vitest";
 import { suite, test } from "~test/kit";
 import { mergeTransferLog, type TransferHistory } from "~/features/room/utils/transfer-log";
-import type {
-  TransferProgressPayload,
-  TransferTextPayload,
-} from "~/features/room/constants/transfer";
+import type { RoomText } from "~/features/room/hooks/useRoomSocket";
+import type { TransferProgressPayload } from "~/features/room/constants/transfer";
 
 function historyFile(over: Partial<TransferHistory[number]> = {}): TransferHistory[number] {
   return {
@@ -13,6 +11,7 @@ function historyFile(over: Partial<TransferHistory[number]> = {}): TransferHisto
     fileName: "report.pdf",
     fileSizeBytes: 1024,
     content: null,
+    author: null,
     delivered: true,
     createdAt: "2026-01-01T10:00:00.000Z",
     ...over,
@@ -26,6 +25,7 @@ function historyText(over: Partial<TransferHistory[number]> = {}): TransferHisto
     fileName: null,
     fileSizeBytes: null,
     content: "saved note",
+    author: { role: "RECEIVER" },
     delivered: true,
     createdAt: "2026-01-01T10:05:00.000Z",
     ...over,
@@ -44,16 +44,25 @@ function progress(over: Partial<TransferProgressPayload> = {}): TransferProgress
   };
 }
 
-function text(over: Partial<TransferTextPayload> = {}): TransferTextPayload {
+function text(over: Partial<RoomText> = {}): RoomText {
   return {
     transferId: "x1",
     payloadType: "TEXT_SNIPPET",
     content: "hello world",
+    author: { role: "SENDER" },
+    mine: false,
     ...over,
   };
 }
 
-const noLive = { transfers: [], texts: [], delivered: new Set<string>(), liveTimestamps: new Map() };
+const noLive = {
+  transfers: [],
+  texts: [],
+  delivered: new Set<string>(),
+  ownIds: new Set<string>(),
+  isSender: false,
+  liveTimestamps: new Map<string, number>(),
+};
 
 suite("mergeTransferLog", () => {
   test("maps a delivered file from history to a file row", () => {
@@ -84,9 +93,9 @@ suite("mergeTransferLog", () => {
 
   test("appends a live file row not present in history, marking delivery from the set", () => {
     const rows = mergeTransferLog({
+      ...noLive,
       history: [],
       transfers: [progress({ transferId: "p1" })],
-      texts: [],
       delivered: new Set(["p1"]),
       liveTimestamps: new Map([["p1", 5]]),
     });
@@ -96,26 +105,22 @@ suite("mergeTransferLog", () => {
 
   test("a live progress event refines a persisted row's status but keeps its timestamp", () => {
     const rows = mergeTransferLog({
+      ...noLive,
       history: [historyFile({ id: "same", delivered: false })],
       transfers: [progress({ transferId: "same" })],
-      texts: [],
       delivered: new Set(["same"]),
       liveTimestamps: new Map([["same", 999]]),
     });
     expect(rows).toHaveLength(1);
-    // Live delivery wins for status; the persisted createdAt still orders the row.
     expect(rows[0].status).toBe("delivered");
     expect(rows[0].receivedAt).toBe(Date.parse("2026-01-01T10:00:00.000Z"));
   });
 
   test("a delivered history row isn't downgraded by a lagging live progress event", () => {
-    // The delivered set hasn't caught up to the persisted delivery yet, so the
-    // live payload alone would read as in_progress — delivery must not regress.
     const rows = mergeTransferLog({
+      ...noLive,
       history: [historyFile({ id: "same", delivered: true })],
       transfers: [progress({ transferId: "same" })],
-      texts: [],
-      delivered: new Set<string>(),
       liveTimestamps: new Map([["same", 999]]),
     });
     expect(rows).toHaveLength(1);
@@ -128,16 +133,14 @@ suite("mergeTransferLog", () => {
       id: "ht1",
       kind: "snippet",
       name: "saved note",
-      value: "saved note",
+      content: "saved note",
       status: "delivered",
     });
   });
 
   test("hydrates a persisted link from history with an href", () => {
     const [row] = mergeTransferLog({
-      history: [
-        historyText({ id: "hl1", payloadType: "LINK", content: "https://example.com/x" }),
-      ],
+      history: [historyText({ id: "hl1", payloadType: "LINK", content: "https://example.com/x" })],
       ...noLive,
     });
     expect(row).toMatchObject({
@@ -149,6 +152,34 @@ suite("mergeTransferLog", () => {
     });
   });
 
+  test("carries a history row's author through for attribution", () => {
+    const [row] = mergeTransferLog({
+      history: [historyText({ author: { role: "RECEIVER" } })],
+      ...noLive,
+    });
+    expect(row.author).toEqual({ role: "RECEIVER" });
+    expect(row.mine).toBe(false);
+  });
+
+  test("marks a history row mine when this client recorded sending it", () => {
+    const [row] = mergeTransferLog({
+      history: [historyText({ id: "own" })],
+      ...noLive,
+      ownIds: new Set(["own"]),
+    });
+    expect(row.mine).toBe(true);
+  });
+
+  test("a file is mine only when this client is the Sender", () => {
+    const asReceiver = mergeTransferLog({ history: [historyFile()], ...noLive, isSender: false });
+    expect(asReceiver[0].mine).toBe(false);
+    expect(asReceiver[0].author).toEqual({ role: "SENDER" });
+
+    const asSender = mergeTransferLog({ history: [historyFile()], ...noLive, isSender: true });
+    expect(asSender[0].mine).toBe(true);
+    expect(asSender[0].author).toBeNull();
+  });
+
   test("a live text event and its persisted history row collapse to one", () => {
     const rows = mergeTransferLog({
       ...noLive,
@@ -157,7 +188,6 @@ suite("mergeTransferLog", () => {
       liveTimestamps: new Map([["dup", Date.parse("2026-01-01T11:00:00.000Z")]]),
     });
     expect(rows).toHaveLength(1);
-    // History owns the timestamp even when a live event trails it.
     expect(rows[0].receivedAt).toBe(Date.parse("2026-01-01T10:05:00.000Z"));
   });
 
@@ -169,44 +199,51 @@ suite("mergeTransferLog", () => {
     expect(rows).toHaveLength(0);
   });
 
-  test("maps a text snippet to a copyable snippet row", () => {
+  test("maps a live text snippet to a copyable snippet row, tagged mine", () => {
     const rows = mergeTransferLog({
+      ...noLive,
       history: [],
-      transfers: [],
-      texts: [text({ transferId: "x1", content: "multi\nline\ttext" })],
-      delivered: new Set<string>(),
+      texts: [text({ transferId: "x1", content: "multi\nline\ttext", mine: true, author: null })],
       liveTimestamps: new Map([["x1", 1]]),
     });
     expect(rows[0]).toMatchObject({
       id: "x1",
       kind: "snippet",
       name: "multi line text",
-      value: "multi\nline\ttext",
+      content: "multi\nline\ttext",
       status: "delivered",
+      mine: true,
     });
   });
 
-  test("maps a link payload to a link row with an href", () => {
+  test("maps an incoming link payload to a link row with its author", () => {
     const rows = mergeTransferLog({
+      ...noLive,
       history: [],
-      transfers: [],
-      texts: [text({ transferId: "l1", payloadType: "LINK", content: "https://example.com" })],
-      delivered: new Set<string>(),
+      texts: [
+        text({
+          transferId: "l1",
+          payloadType: "LINK",
+          content: "https://example.com",
+          author: { role: "RECEIVER" },
+        }),
+      ],
       liveTimestamps: new Map([["l1", 1]]),
     });
     expect(rows[0]).toMatchObject({
       kind: "link",
       name: "https://example.com",
       href: "https://example.com",
+      mine: false,
+      author: { role: "RECEIVER" },
     });
   });
 
   test("orders rows oldest first across history and live sources", () => {
     const rows = mergeTransferLog({
+      ...noLive,
       history: [historyFile({ id: "old", createdAt: "2026-01-01T09:00:00.000Z" })],
       transfers: [progress({ transferId: "new" })],
-      texts: [],
-      delivered: new Set<string>(),
       liveTimestamps: new Map([["new", Date.parse("2026-01-01T11:00:00.000Z")]]),
     });
     expect(rows.map((r) => r.id)).toEqual(["old", "new"]);

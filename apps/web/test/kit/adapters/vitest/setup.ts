@@ -16,8 +16,10 @@ vi.mock("socket.io-client", () => ({
 }));
 
 // jsdom has no layout engine; TanStack Router's scroll restoration calls
-// window.scrollTo, which jsdom otherwise logs as "Not implemented".
+// window.scrollTo, and the Room stream pins to its newest message with
+// Element.scrollIntoView — both of which jsdom otherwise logs as "Not implemented".
 window.scrollTo = (() => {}) as unknown as typeof window.scrollTo;
+Element.prototype.scrollIntoView = (() => {}) as unknown as typeof Element.prototype.scrollIntoView;
 
 // jsdom ships no ResizeObserver; input-otp (the Room Code field) constructs one on
 // mount. A no-op stub is enough — specs assert behavior, not layout measurement.

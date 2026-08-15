@@ -11,6 +11,7 @@ import { ROOM_CODE_MAX_ATTEMPTS, ROOM_CODE_PATTERN } from '../domain/room/room-c
 import { InMemoryRoomRepository } from '../domain/room/room.repository.fake';
 import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
 import { FakeDeliveryRepository } from '../domain/delivery/delivery.repository.fake';
+import { InMemoryParticipantRepository } from '../domain/participant/participant.repository.fake';
 import { FakeObjectStorage } from '../domain/storage/object-storage.fake';
 import type { Room } from '../domain/room/room.entity';
 import type { CodeGenerator } from '../domain/security/code-generator';
@@ -59,9 +60,18 @@ function setup(codes: string[], overrides: { existingCodes?: string[] } = {}) {
   const tokenIssuer = new FakeTokenIssuer();
   const transfers = new FakeTransferRepository();
   const deliveries = new FakeDeliveryRepository();
+  const participants = new InMemoryParticipantRepository();
   const storage = new FakeObjectStorage();
-  const service = new RoomService(repo, codeGen, tokenIssuer, transfers, deliveries, storage);
-  return { service, repo, codeGen, tokenIssuer, transfers, deliveries, storage };
+  const service = new RoomService(
+    repo,
+    codeGen,
+    tokenIssuer,
+    transfers,
+    deliveries,
+    participants,
+    storage,
+  );
+  return { service, repo, codeGen, tokenIssuer, transfers, deliveries, participants, storage };
 }
 
 describe('RoomService.create', () => {
@@ -269,6 +279,7 @@ describe('RoomService.transfers', () => {
       fileName: 'video.mp4',
       fileSizeBytes: 2048,
       content: null,
+      author: null,
       delivered: false,
       createdAt: transfer.createdAt.toISOString(),
     });
@@ -295,9 +306,31 @@ describe('RoomService.transfers', () => {
       fileName: null,
       fileSizeBytes: null,
       content: 'https://example.com',
+      author: null,
       delivered: false,
       createdAt: transfer.createdAt.toISOString(),
     });
+  });
+
+  it('attributes a Transfer to its author Participant', async () => {
+    const { service, repo, transfers, participants } = setup([]);
+    const room = seedRoom(repo, { code: 'LOG004' });
+    const author = await participants.create({
+      roomId: room.id,
+      role: 'RECEIVER',
+      tokenHash: 'hash-1',
+    });
+    const transfer = await transfers.createTextTransfer({
+      roomId: room.id,
+      payloadType: 'TEXT_SNIPPET',
+      content: 'hi from a Receiver',
+      contentLength: BigInt(18),
+      authorParticipantId: author.id,
+    });
+
+    const [item] = await service.listTransfers('LOG004');
+    expect(item.author).toEqual({ role: 'RECEIVER' });
+    expect(item.id).toBe(transfer.id);
   });
 
   it('marks a Transfer delivered once a Delivery row exists', async () => {

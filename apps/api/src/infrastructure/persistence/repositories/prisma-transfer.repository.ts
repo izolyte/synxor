@@ -67,6 +67,7 @@ export class PrismaTransferRepository implements TransferRepository {
         roomId: input.roomId,
         payloadType: input.payloadType,
         contentLength: input.contentLength,
+        authorParticipantId: input.authorParticipantId,
         textPayload: { create: { content: input.content } },
       },
     });
@@ -116,6 +117,7 @@ export class PrismaTransferRepository implements TransferRepository {
       roomId: t.roomId,
       payloadType: assertPayloadType(t.payloadType),
       contentLength: t.contentLength,
+      authorParticipantId: t.authorParticipantId,
       createdAt: t.createdAt,
     };
   }

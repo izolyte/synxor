@@ -17,6 +17,10 @@ import {
   DELIVERY_REPOSITORY,
   type DeliveryRepository,
 } from '../domain/delivery/delivery.repository';
+import {
+  PARTICIPANT_REPOSITORY,
+  type ParticipantRepository,
+} from '../domain/participant/participant.repository';
 import { OBJECT_STORAGE, type ObjectStorage } from '../domain/storage/object-storage';
 import type { CreateRoomResult } from './dto/create-room.dto';
 import type { JoinRoomResult } from './dto/join-room.dto';
@@ -36,6 +40,7 @@ export class RoomService {
     @Inject(TOKEN_ISSUER) private readonly tokenIssuer: TokenIssuer,
     @Inject(TRANSFER_REPOSITORY) private readonly transfers: TransferRepository,
     @Inject(DELIVERY_REPOSITORY) private readonly deliveries: DeliveryRepository,
+    @Inject(PARTICIPANT_REPOSITORY) private readonly participants: ParticipantRepository,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
   ) {}
 
@@ -89,21 +94,31 @@ export class RoomService {
 
     const transfers = await this.transfers.findByRoomId(room.id);
     const transferIds = transfers.map((t) => t.id);
+    const authorIds = [
+      ...new Set(
+        transfers.map((t) => t.authorParticipantId).filter((id): id is string => id !== null),
+      ),
+    ];
 
     // Batched reads instead of a round-trip set per Transfer — the Log grows
     // with the Room, so N+1 here scales with session length.
-    const [filePayloads, textPayloads, deliveries] = await Promise.all([
+    const [filePayloads, textPayloads, deliveries, authors] = await Promise.all([
       this.transfers.findFilePayloadsByTransferIds(transferIds),
       this.transfers.findTextPayloadsByTransferIds(transferIds),
       this.deliveries.findByTransferIds(transferIds),
+      this.participants.findByIds(authorIds),
     ]);
     const filePayloadByTransferId = new Map(filePayloads.map((fp) => [fp.transferId, fp]));
     const textPayloadByTransferId = new Map(textPayloads.map((tp) => [tp.transferId, tp]));
     const deliveredTransferIds = new Set(deliveries.map((d) => d.transferId));
+    const authorById = new Map(authors.map((a) => [a.id, a]));
 
     return transfers.map((transfer) => {
       const filePayload = filePayloadByTransferId.get(transfer.id) ?? null;
       const textPayload = textPayloadByTransferId.get(transfer.id) ?? null;
+      const author = transfer.authorParticipantId
+        ? authorById.get(transfer.authorParticipantId)
+        : null;
       return {
         id: transfer.id,
         payloadType: transfer.payloadType,
@@ -112,6 +127,7 @@ export class RoomService {
         // well under Number.MAX_SAFE_INTEGER (the upload cap is far below it).
         fileSizeBytes: filePayload ? Number(filePayload.fileSizeBytes) : null,
         content: textPayload?.content ?? null,
+        author: author ? { role: author.role } : null,
         delivered: deliveredTransferIds.has(transfer.id),
         createdAt: transfer.createdAt.toISOString(),
       };
