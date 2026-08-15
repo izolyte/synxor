@@ -12,6 +12,7 @@ function progress(over: Partial<TransferProgressPayload> = {}): TransferProgress
     receivedChunks: 1,
     totalChunks: 4,
     complete: false,
+    author: null,
     ...over,
   };
 }
@@ -23,7 +24,7 @@ function args(over: Partial<UseTransferLogRowsArgs> = {}): UseTransferLogRowsArg
     texts: [],
     delivered: new Set<string>(),
     ownIds: new Set<string>(),
-    isSender: false,
+    selfKey: undefined,
     token: undefined,
     apiOrigin: undefined,
     ...over,

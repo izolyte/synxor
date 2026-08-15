@@ -27,6 +27,14 @@ export class PrismaParticipantRepository implements ParticipantRepository {
     return participants.map((p) => this.toEntity(p));
   }
 
+  async findByRoomAndTokenHash(roomId: string, tokenHash: string): Promise<Participant | null> {
+    const p = await this.prisma.participant.findFirst({
+      where: { roomId, tokenHash },
+      orderBy: { joinedAt: 'desc' },
+    });
+    return p ? this.toEntity(p) : null;
+  }
+
   async findDisplayName(roomId: string, tokenHash: string): Promise<string | null> {
     const row = await this.prisma.participant.findFirst({
       where: { roomId, tokenHash, displayName: { not: null } },

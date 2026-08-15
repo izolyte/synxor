@@ -54,6 +54,13 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
     return [...this.stored.values()].filter((p) => wanted.has(p.id));
   }
 
+  async findByRoomAndTokenHash(roomId: string, tokenHash: string): Promise<Participant | null> {
+    const rows = [...this.stored.values()]
+      .filter((p) => p.roomId === roomId && p.tokenHash === tokenHash)
+      .sort((a, b) => b.joinedAt.getTime() - a.joinedAt.getTime());
+    return rows[0] ?? null;
+  }
+
   async setDisconnected(id: string, at: Date): Promise<Participant> {
     const participant = this.stored.get(id);
     if (!participant) throw new Error(`Participant not found: ${id}`);

@@ -9,6 +9,7 @@ import { CHUNK_SIZE_BYTES } from '../domain/transfer/chunking';
 import { FileTooLargeError, UploadSessionNotFoundError } from '../domain/transfer/transfer.errors';
 import { RoomTokenGuard } from '../common/auth/room-token.guard';
 import { RoomRoleGuard } from '../common/auth/room-role.guard';
+import { hashRoomToken } from '../infrastructure/security/token-hash';
 import { TransferController } from './transfer.controller';
 import {
   ChunkedUploadService,
@@ -149,10 +150,16 @@ describe('TransferController', () => {
       await request(http()).post('/transfer/chunk').expect(401);
     });
 
-    it('rejects a Receiver with 403', async () => {
-      const res = await postChunk(receiverToken, validFields, Buffer.alloc(10)).expect(403);
-      expect(messageOf(res)).toBe('Only the Sender may upload');
-      expect(uploads.calls).toHaveLength(0);
+    it('accepts a Receiver upload and attributes it to the Receiver', async () => {
+      const chunk = Buffer.alloc(CHUNK_SIZE_BYTES, 1);
+      await postChunk(receiverToken, validFields, chunk).expect(201);
+
+      expect(uploads.calls).toHaveLength(1);
+      expect(uploads.calls[0]).toMatchObject({
+        roomId: 'room-1',
+        authorRole: 'RECEIVER',
+        authorTokenHash: hashRoomToken(receiverToken),
+      });
     });
 
     it('rejects a request missing the chunk file part', async () => {
@@ -185,6 +192,8 @@ describe('TransferController', () => {
         fileName: 'video.mp4',
         fileSizeBytes: CHUNK_SIZE_BYTES + 100,
         mimeType: 'video/mp4',
+        authorRole: 'SENDER',
+        authorTokenHash: hashRoomToken(senderToken),
       });
       expect(uploads.calls[0].chunk.equals(chunk)).toBe(true);
     });

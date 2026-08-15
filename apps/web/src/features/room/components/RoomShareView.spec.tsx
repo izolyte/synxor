@@ -78,6 +78,7 @@ function progress(receivedChunks: number, complete: boolean): TransferProgressPa
     receivedChunks,
     totalChunks: 4,
     complete,
+    author: null,
   };
 }
 
@@ -136,11 +137,11 @@ suite("RoomShareView", () => {
     await screen.find({ testId: "drop-zone" }).shouldBeVisible();
   });
 
-  test("a Receiver does not get the Drop Zone", async () => {
+  test("a Receiver gets the Drop Zone too — files go both ways", async () => {
     const screen = renderComponent(
       <RoomShareView roomCode="ABC123" expiresAt={undefined} role="receiver" />,
     );
-    await screen.find({ testId: "drop-zone" }).shouldNotExist();
+    await screen.find({ testId: "drop-zone" }).shouldBeVisible();
   });
 
   test("a Participant can send a message and see it in the stream", async () => {

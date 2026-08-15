@@ -15,6 +15,7 @@ function progress(id: string, name: string): TransferProgressPayload {
     receivedChunks: 2,
     totalChunks: 2,
     complete: true,
+    author: null,
   };
 }
 

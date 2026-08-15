@@ -88,8 +88,11 @@ export function RoomShareView({
   const composing = useComposingSignal(setTyping);
   const apiOrigin = socketToken ? resolveApiOrigin(import.meta.env) : undefined;
 
-  const [senderUploading, setSenderUploading] = useState(false);
-  const transferActive = transfers.some((t) => !t.complete) || senderUploading;
+  // Any Participant can upload now, so this tracks a local upload in flight (not
+  // just the Sender's) — the seal window needs it because an own upload isn't in
+  // the socket `transfers` feed until the server echoes its first progress event.
+  const [uploading, setUploading] = useState(false);
+  const transferActive = transfers.some((t) => !t.complete) || uploading;
   useEffect(() => {
     if (expired && !transferActive) setSealed(true);
   }, [expired, transferActive]);
@@ -102,7 +105,7 @@ export function RoomShareView({
     texts,
     delivered,
     ownIds: own.ids,
-    isSender,
+    selfKey: self?.key,
     identityOverrides: identities,
     token: socketToken,
     apiOrigin,
@@ -184,15 +187,15 @@ export function RoomShareView({
         <TypingIndicator identities={[...typing.values()]} />
 
         <footer className="flex shrink-0 flex-col gap-3 border-t border-[var(--border)] py-3">
-          {isSender && (
-            <DropZone
-              token={socketToken}
-              apiOrigin={apiOrigin}
-              delivered={delivered}
-              uploader={uploader}
-              onActiveChange={setSenderUploading}
-            />
-          )}
+          {/* Two-way transfers: every Participant gets the attach + drop affordance,
+              not just the Sender. */}
+          <DropZone
+            token={socketToken}
+            apiOrigin={apiOrigin}
+            delivered={delivered}
+            uploader={uploader}
+            onActiveChange={setUploading}
+          />
           <SelfIdentity self={self} onRename={rename} />
           {/* Past the Expiry the Room is held open only to land an in-flight
               Transfer — seal the composer so nothing new goes into a dead Room. */}

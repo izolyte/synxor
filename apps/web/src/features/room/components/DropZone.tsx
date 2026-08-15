@@ -23,10 +23,9 @@ import { formatFileSize } from "~/features/room/utils/format-file-size";
 import { cn } from "~/shared/utils/cn";
 
 /**
- * Sender's file staging area: drag-and-drop or click-to-browse to queue a file,
- * then drag its handle to reorder the send queue. No upload call happens here —
- * issue #13 is the UI-only slice; #15 wires the queue to the chunked upload
- * endpoint. Two separate drag systems, deliberately: incoming files ride the
+ * Any Participant's file staging area: drag-and-drop or click-to-browse to queue a
+ * file, then drag its handle to reorder the send queue. Two separate drag systems,
+ * deliberately: incoming files ride the
  * native HTML5 DataTransfer API (dnd-kit only drags DOM elements, not OS
  * filesystem entries), while reordering the already-queued list is dnd-kit's job.
  *
@@ -48,8 +47,8 @@ export function DropZone({
    *  Delivered. Absent (no live socket, tests) leaves rows at Sent. */
   delivered?: ReadonlySet<string>;
   /** Reports whether a local upload is in flight. The Room-sealing window needs
-   *  this because a Sender's own upload isn't in the socket `transfers` feed
-   *  until the server echoes its first progress broadcast. */
+   *  this because an own upload isn't in the socket `transfers` feed until the
+   *  server echoes its first progress broadcast. */
   onActiveChange?: (active: boolean) => void;
 }) {
   const { files, notice, addFiles, rejectFolder, removeFile, reorderFiles } = useFileQueue();

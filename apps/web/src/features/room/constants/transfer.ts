@@ -31,6 +31,10 @@ export interface TransferProgressPayload {
   receivedChunks: number;
   totalChunks: number;
   complete: boolean;
+  // Who is uploading, so the stream attributes a live file from its first progress
+  // event and the uploader's own client right-aligns it. Null when the token has
+  // no resolvable identity (never joined over the socket).
+  author: TransferAuthor | null;
 }
 
 export interface TransferDeliveredPayload {

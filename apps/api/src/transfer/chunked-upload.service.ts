@@ -4,10 +4,17 @@ import {
   TRANSFER_REPOSITORY,
   type TransferRepository,
 } from '../domain/transfer/transfer.repository';
+import {
+  PARTICIPANT_REPOSITORY,
+  type ParticipantRepository,
+} from '../domain/participant/participant.repository';
+import { deriveIdentity } from '../domain/participant/participant-identity';
+import type { ParticipantRole } from '../domain/participant/participant.entity';
 import { OBJECT_STORAGE, type ObjectStorage } from '../domain/storage/object-storage';
 import {
   MAX_CONCURRENT_TRANSFERS_PER_ROOM,
   UPLOAD_SESSION_STORE,
+  type UploadAuthor,
   type UploadSession,
   type UploadSessionStore,
 } from '../domain/transfer/upload-session';
@@ -32,6 +39,11 @@ export interface AcceptChunkInput {
   fileSizeBytes: number;
   mimeType: string;
   chunk: Buffer;
+  // The uploader, from the Room Token: the stable hash to resolve their identity
+  // and the token's role. Absent only when a caller (a legacy test) omits it; the
+  // file then persists author-less and the Log falls back to the Sender.
+  authorTokenHash?: string;
+  authorRole?: ParticipantRole;
 }
 
 export interface AcceptChunkResult {
@@ -45,6 +57,7 @@ export interface AcceptChunkResult {
 export class ChunkedUploadService {
   constructor(
     @Inject(TRANSFER_REPOSITORY) private readonly transfers: TransferRepository,
+    @Inject(PARTICIPANT_REPOSITORY) private readonly participants: ParticipantRepository,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(UPLOAD_SESSION_STORE) private readonly sessions: UploadSessionStore,
     private readonly assembler: ChunkAssembler,
@@ -101,6 +114,10 @@ export class ChunkedUploadService {
       throw new FileTooLargeError(input.fileSizeBytes, this.options.maxFileSizeBytes);
     }
 
+    // Resolve who's uploading before the reserve so the identity rides every
+    // progress broadcast and the persisted Transfer carries its author.
+    const author = await this.resolveAuthor(input);
+
     // Pin the id up front so the room slot is claimed before any DB write; the
     // reserve is atomic, so concurrent opens can't overshoot the cap.
     const transferId = randomUUID();
@@ -112,6 +129,7 @@ export class ChunkedUploadService {
         fileSizeBytes: input.fileSizeBytes,
         mimeType: input.mimeType,
         totalChunks: input.totalChunks,
+        author,
       },
       MAX_CONCURRENT_TRANSFERS_PER_ROOM,
     );
@@ -125,6 +143,7 @@ export class ChunkedUploadService {
         roomId: input.roomId,
         payloadType: 'FILE',
         contentLength: BigInt(input.fileSizeBytes),
+        authorParticipantId: author?.participantId ?? null,
       });
       await this.transfers.createFilePayload({
         transferId,
@@ -140,5 +159,22 @@ export class ChunkedUploadService {
     }
 
     return session;
+  }
+
+  // Resolve who's uploading from the Room Token the guard verified. The upload
+  // rides HTTP with no socket, so the author is re-found by (roomId, tokenHash);
+  // the identity is derived from the token either way, so a file still labels
+  // even when the token never opened a socket (participantId then null).
+  private async resolveAuthor(input: AcceptChunkInput): Promise<UploadAuthor | undefined> {
+    if (!input.authorTokenHash || !input.authorRole) return undefined;
+    const participant = await this.participants.findByRoomAndTokenHash(
+      input.roomId,
+      input.authorTokenHash,
+    );
+    return {
+      participantId: participant?.id ?? null,
+      role: input.authorRole,
+      identity: deriveIdentity(input.authorTokenHash, participant?.displayName),
+    };
   }
 }

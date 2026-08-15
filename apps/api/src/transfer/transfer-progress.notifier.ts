@@ -17,6 +17,11 @@ export class TransferProgressNotifier {
       receivedChunks,
       totalChunks: session.totalChunks,
       complete,
+      // The session carries the resolved uploader; strip the internal participant
+      // id and hand the wire only the role + identity the stream renders.
+      author: session.author
+        ? { role: session.author.role, identity: session.author.identity }
+        : null,
     };
     this.broadcaster.emitToRoom(session.roomId, TransferEvent.Progress, payload);
   }

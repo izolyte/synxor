@@ -10,6 +10,8 @@ import {
 import { MAX_CONCURRENT_TRANSFERS_PER_ROOM } from '../domain/transfer/upload-session';
 import { FakeObjectStorage } from '../domain/storage/object-storage.fake';
 import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
+import { InMemoryParticipantRepository } from '../domain/participant/participant.repository.fake';
+import { deriveIdentity } from '../domain/participant/participant-identity';
 import { InMemoryUploadSessionStore } from '../infrastructure/upload-session/in-memory-upload-session.store';
 import { chunkObjectKey, fileObjectKey } from '../domain/transfer/storage-key';
 import { ChunkedUploadService, type AcceptChunkInput } from './chunked-upload.service';
@@ -28,6 +30,7 @@ class FakeBroadcaster implements RoomBroadcaster {
 describe('ChunkedUploadService', () => {
   let storage: FakeObjectStorage;
   let transfers: FakeTransferRepository;
+  let participants: InMemoryParticipantRepository;
   let sessions: InMemoryUploadSessionStore;
   let broadcaster: FakeBroadcaster;
   let service: ChunkedUploadService;
@@ -37,10 +40,12 @@ describe('ChunkedUploadService', () => {
   beforeEach(() => {
     storage = new FakeObjectStorage();
     transfers = new FakeTransferRepository();
+    participants = new InMemoryParticipantRepository();
     sessions = new InMemoryUploadSessionStore();
     broadcaster = new FakeBroadcaster();
     service = new ChunkedUploadService(
       transfers,
+      participants,
       storage,
       sessions,
       new ChunkAssembler(storage),
@@ -125,7 +130,41 @@ describe('ChunkedUploadService', () => {
         receivedChunks: 2,
         totalChunks: 2,
         complete: true,
+        // No author token on these inputs, so the file stays author-less.
+        author: null,
       },
+    });
+  });
+
+  it('attributes the upload to the Participant behind the Room Token', async () => {
+    const tokenHash = 'receiver-hash';
+    const receiver = await participants.create({ roomId, role: 'RECEIVER', tokenHash });
+
+    const { transferId } = await service.acceptChunk(
+      firstChunkInput({ authorTokenHash: tokenHash, authorRole: 'RECEIVER' }),
+    );
+
+    const transfer = await transfers.findById(transferId);
+    expect(transfer?.authorParticipantId).toBe(receiver.id);
+
+    const identity = deriveIdentity(tokenHash);
+    expect(broadcaster.emitted[0].payload).toMatchObject({
+      author: { role: 'RECEIVER', identity },
+    });
+  });
+
+  it('still labels a file whose token never joined over the socket', async () => {
+    const tokenHash = 'ghost-hash';
+    const { transferId } = await service.acceptChunk(
+      firstChunkInput({ authorTokenHash: tokenHash, authorRole: 'SENDER' }),
+    );
+
+    // No Participant row to attribute to, but the identity still derives from the
+    // token so the stream can label the file.
+    const transfer = await transfers.findById(transferId);
+    expect(transfer?.authorParticipantId).toBeNull();
+    expect(broadcaster.emitted[0].payload).toMatchObject({
+      author: { role: 'SENDER', identity: deriveIdentity(tokenHash) },
     });
   });
 
@@ -141,6 +180,7 @@ describe('ChunkedUploadService', () => {
     const exploding = new ExplodingStorage();
     const svc = new ChunkedUploadService(
       transfers,
+      participants,
       exploding,
       sessions,
       new ChunkAssembler(exploding),
