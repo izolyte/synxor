@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" role="img" aria-label="synxor">
+  <!-- The mark tracks the primary token as it swaps light/dark: base stroke is
+       the sRGB equivalent of light oklch(0.62 0.100 200); dark mode lifts it to
+       the dark primary oklch(0.68 0.1 200). Base lives on the path so renderers
+       that skip the style block still get a teal mark. -->
+  <style>@media (prefers-color-scheme: dark) { path { stroke: #38abb1 } }</style>
+  <path stroke="#1c989e" d="M5 5l14 14M19 5L5 19" />
+</svg>

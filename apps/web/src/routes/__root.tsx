@@ -1,9 +1,16 @@
-import { createRootRouteWithContext, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
+import {
+  createRootRouteWithContext,
+  HeadContent,
+  Link,
+  Outlet,
+  Scripts,
+} from "@tanstack/react-router";
 import "../styles/globals.css";
 import { Button } from "~/shared/ui/button";
 import { Wordmark } from "~/shared/components/Wordmark";
 import { CenteredScreen } from "~/shared/components/CenteredScreen";
 import { ThemeToggle } from "~/shared/components/ThemeToggle";
+import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import type { RouterAppContext } from "~/shared/services/trpc";
 
 // Runs before first paint so a returning dark-mode user never sees a light flash.
@@ -12,15 +19,40 @@ import type { RouterAppContext } from "~/shared/services/trpc";
 const themeScript = `(function(){var d=document.documentElement,s=null;try{s=localStorage.getItem("theme")}catch(_){}(s==="dark"||(!s&&matchMedia("(prefers-color-scheme:dark)").matches))&&d.classList.add("dark")})()`;
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { name: "theme-color", content: "#ffffff", media: "(prefers-color-scheme: light)" },
-      { name: "theme-color", content: "#1a1a1a", media: "(prefers-color-scheme: dark)" },
-      { title: "Synxor" },
-    ],
-  }),
+  head: () => {
+    // The OG/Twitter card wants absolute URLs; the canonical public origin is
+    // the same one every other surface resolves to (VITE_API_URL).
+    const origin = resolveApiOrigin(import.meta.env);
+    const ogImage = `${origin}/og.png`;
+    return {
+      meta: [
+        { charSet: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+        { name: "theme-color", content: "#ffffff", media: "(prefers-color-scheme: light)" },
+        { name: "theme-color", content: "#1a1a1a", media: "(prefers-color-scheme: dark)" },
+        { title: "synxor" },
+        { name: "description", content: "Send it. It vanishes." },
+        { property: "og:type", content: "website" },
+        { property: "og:site_name", content: "synxor" },
+        { property: "og:title", content: "synxor" },
+        { property: "og:description", content: "Send it. It vanishes." },
+        { property: "og:url", content: origin },
+        { property: "og:image", content: ogImage },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: "synxor" },
+        { name: "twitter:description", content: "Send it. It vanishes." },
+        { name: "twitter:image", content: ogImage },
+      ],
+      links: [
+        { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+        { rel: "icon", sizes: "48x48", href: "/favicon.ico" },
+        { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+        { rel: "manifest", href: "/site.webmanifest" },
+      ],
+    };
+  },
   notFoundComponent: NotFoundPage,
   errorComponent: ErrorPage,
   component: RootComponent,
