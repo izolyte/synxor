@@ -3,6 +3,8 @@ import { Wordmark } from "~/shared/components/Wordmark";
 import { CopyButton } from "~/features/room/components/CopyButton";
 import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
+import { PresenceCluster } from "~/features/room/components/PresenceCluster";
+import { PresenceNotice } from "~/features/room/components/PresenceNotice";
 import { ConnectionAlert } from "~/features/room/components/ConnectionAlert";
 import { TerminalNotice } from "~/features/room/components/TerminalNotice";
 import { DropZone } from "~/features/room/components/DropZone";
@@ -77,6 +79,8 @@ export function RoomShareView({
   const {
     status,
     receiverCount,
+    roster,
+    presenceChange,
     transfers,
     texts,
     delivered,
@@ -151,7 +155,10 @@ export function RoomShareView({
                 Room ready
               </h1>
             </div>
-            {isSender && <DeleteRoomControl onClose={closeRoom} />}
+            <div className="flex items-center gap-3">
+              <PresenceCluster roster={roster} self={self} />
+              {isSender && <DeleteRoomControl onClose={closeRoom} />}
+            </div>
           </div>
 
           {/* Once someone's here (or on a Receiver's own session) the header carries
@@ -236,6 +243,9 @@ export function RoomShareView({
 
       {/* One-shot heads-up as the Room nears Expiry — fires once, then clears. */}
       <ExpiryWarningNotice phase={countdown?.phase} />
+
+      {/* Ephemeral "… joined / … left" as Participants come and go. */}
+      <PresenceNotice change={presenceChange} self={self} />
     </div>
   );
 }

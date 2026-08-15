@@ -251,6 +251,11 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
       return;
     }
 
+    // Read presence before recording this connection so the roster broadcast can
+    // tell a genuinely new arrival (announce it) from a second tab of someone
+    // already here (stay silent).
+    const firstConnection = !this.isPresent(roomId, identity.key);
+
     this.connected.set(socket.id, {
       participantId,
       roomId,
@@ -265,6 +270,13 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
     if (participantRole === 'RECEIVER') {
       this.server.to(roomId).emit(RoomEvent.Joined, { receiverCount });
     }
+
+    // Roster covers every role — the cluster shows the Sender too — so it fires on
+    // any join, alongside (not folded into) the receiver-count event above.
+    this.server.to(roomId).emit(RoomEvent.Roster, {
+      roster: this.rosterFor(roomId),
+      ...(firstConnection ? { joined: identity } : {}),
+    });
 
     // If the socket dropped during the awaits above, its 'disconnecting' already
     // fired while `connected` had no entry — reconcile now so the join isn't
@@ -294,6 +306,33 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
     if (info.role === 'RECEIVER') {
       nsp.to(info.roomId).emit(RoomEvent.Left, { receiverCount });
     }
+
+    // `connected` was already pruned above, so a lingering connection means this
+    // person still has another tab open — announce the departure only when their
+    // last one drops.
+    const stillPresent = this.isPresent(info.roomId, info.identity.key);
+    nsp.to(info.roomId).emit(RoomEvent.Roster, {
+      roster: this.rosterFor(info.roomId),
+      ...(stillPresent ? {} : { left: info.identity }),
+    });
+  }
+
+  // The present Participants of a Room, one entry per identity — a person with two
+  // tabs is one avatar in the cluster. Sourced from the live connection map (a
+  // single api instance owns every socket), so it needs no round-trip.
+  private rosterFor(roomId: string): ParticipantIdentity[] {
+    const byKey = new Map<string, ParticipantIdentity>();
+    for (const info of this.connected.values()) {
+      if (info.roomId === roomId) byKey.set(info.identity.key, info.identity);
+    }
+    return [...byKey.values()];
+  }
+
+  private isPresent(roomId: string, identityKey: string): boolean {
+    for (const info of this.connected.values()) {
+      if (info.roomId === roomId && info.identity.key === identityKey) return true;
+    }
+    return false;
   }
 }
 

@@ -84,14 +84,34 @@ function Harness({
   const [token, setToken] = useState(initialToken);
   const [closeResult, setCloseResult] = useState("pending");
   const factory = useMemo(() => () => socket as unknown as Socket, [socket]);
-  const { status, receiverCount, transfers, texts, delivered, closed, sendText, closeRoom } =
-    useRoomSocket(token, factory);
+  const {
+    status,
+    receiverCount,
+    roster,
+    presenceChange,
+    transfers,
+    texts,
+    delivered,
+    closed,
+    sendText,
+    closeRoom,
+  } = useRoomSocket(token, factory);
+  const heron = { key: "k1", colorKey: "indigo", name: "Indigo Heron" };
+  const otter = { key: "k2", colorKey: "amber", name: "Amber Otter" };
   return (
     <>
       <output data-testid="status">{status}</output>
       <output data-testid="closed">{String(closed)}</output>
       <output data-testid="close-result">{closeResult}</output>
       <output data-testid="count">{receiverCount}</output>
+      <output data-testid="roster">
+        {roster.length === 0 ? "none" : roster.map((p) => p.name).join(" ")}
+      </output>
+      <output data-testid="presence">
+        {presenceChange
+          ? `${presenceChange.seq}:${presenceChange.type}:${presenceChange.identity.name}`
+          : "none"}
+      </output>
       <output data-testid="transfers">
         {/* "none" over an empty string: jest-dom rejects toHaveTextContent(""). */}
         {transfers.length === 0
@@ -125,6 +145,18 @@ function Harness({
       <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: 1 })}>join</button>
       <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: "x" })}>garbage</button>
       <button onClick={() => socket.emit(RoomEvent.Left, { receiverCount: 0 })}>leave</button>
+      <button
+        onClick={() =>
+          socket.emit(RoomEvent.Roster, { roster: [heron, otter], joined: otter })
+        }
+      >
+        roster-join
+      </button>
+      <button
+        onClick={() => socket.emit(RoomEvent.Roster, { roster: [heron], left: otter })}
+      >
+        roster-leave
+      </button>
       <button onClick={() => socket.emit(TransferEvent.Progress, progress("a", 1))}>send-a1</button>
       <button onClick={() => socket.emit(TransferEvent.Progress, progress("a", 2))}>send-a2</button>
       <button onClick={() => socket.emit(TransferEvent.Progress, progress("b", 1))}>send-b1</button>
@@ -167,6 +199,30 @@ suite("useRoomSocket", () => {
 
     await screen.find({ role: "button", name: "leave" }).click();
     await screen.find({ testId: "count" }).shouldHaveText("0");
+  });
+
+  test("tracks the presence roster from room:roster", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+    await screen.find({ testId: "roster" }).shouldHaveText("none");
+
+    await screen.find({ role: "button", name: "roster-join" }).click();
+    await screen.find({ testId: "roster" }).shouldHaveText("Indigo Heron Amber Otter");
+
+    await screen.find({ role: "button", name: "roster-leave" }).click();
+    await screen.find({ testId: "roster" }).shouldHaveText("Indigo Heron");
+  });
+
+  test("surfaces a join then a leave as presence changes with a climbing seq", async () => {
+    const screen = renderComponent(<Harness token="tok" socket={new FakeSocket()} />);
+    await screen.find({ testId: "presence" }).shouldHaveText("none");
+
+    await screen.find({ role: "button", name: "roster-join" }).click();
+    await screen.find({ testId: "presence" }).shouldHaveText("1:join:Amber Otter");
+
+    // The next change climbs the seq so a one-shot notice knows it's new — even for
+    // the same person coming and going.
+    await screen.find({ role: "button", name: "roster-leave" }).click();
+    await screen.find({ testId: "presence" }).shouldHaveText("2:leave:Amber Otter");
   });
 
   test("reports disconnected but holds the count for reconnect", async () => {
