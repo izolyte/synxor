@@ -4,6 +4,13 @@ import { renderComponent } from "~test/kit/component";
 import { selectors } from "~test/app";
 
 suite("JoinRoomForm", () => {
+  test("offers the scan-the-QR affordance below the field", async () => {
+    const screen = renderComponent(
+      <JoinRoomForm onJoin={fn()} pending={false} error={null} onErrorClear={fn()} />,
+    );
+    await screen.find(selectors.joinRoom.scan).shouldBeVisible();
+  });
+
   test("auto-submits, uppercased, once six characters are entered", async () => {
     const onJoin = fn<[string], void>();
     const screen = renderComponent(

@@ -24,6 +24,14 @@ suite("Join Room flow", () => {
     await driver.find(selectors.joinRoom.heading).shouldNotExist();
   });
 
+  test("opens with the brand join lockup", async () => {
+    const driver = createVitestDriver();
+    await driver.visit("/join");
+
+    await driver.find(selectors.joinRoom.eyebrow).shouldBeVisible();
+    await driver.find(selectors.joinRoom.heading).shouldBeVisible();
+  });
+
   test("prefills the Room Code from a shared link's ?code", async () => {
     const driver = createVitestDriver();
     await driver.visit("/join?code=ABC123");

@@ -26,8 +26,10 @@ export const copy = {
     error: "Couldn't create the Room. Try again.",
   },
   joinRoom: {
-    heading: "Join Room",
-    hint: "Enter the code from the sender.",
+    heading: "Enter the code",
+    hint: "Six characters from whoever made the room.",
+    eyebrow: "Join a room",
+    scan: "— or scan from their screen —",
     codeLabel: "Room Code",
     cta: "Join Room",
     error: {
@@ -120,6 +122,8 @@ export const selectors = {
       role: "button",
       name: copy.joinRoom.cta,
     } as const satisfies ActionableSelector,
+    eyebrow: { text: copy.joinRoom.eyebrow } as const satisfies ReadonlySelector,
+    scan: { text: copy.joinRoom.scan } as const satisfies ReadonlySelector,
     error: (kind: keyof typeof copy.joinRoom.error) =>
       ({ text: copy.joinRoom.error[kind] }) as const satisfies ReadonlySelector,
   },
