@@ -1,14 +1,8 @@
-import {
-  Check,
-  Copy,
-  Download,
-  ExternalLink,
-  File as FileIcon,
-  Link as LinkIcon,
-} from "lucide-react";
+import { Check, Copy, Download, File as FileIcon } from "lucide-react";
 import type { TransferAuthor } from "~/features/room/constants/transfer";
 import type { TransferLogRow } from "~/features/room/utils/transfer-log";
 import { hasIdentity, identityColorVar } from "~/features/room/constants/identity";
+import { LinkCard } from "~/features/room/components/LinkCard";
 import { ParticipantAvatar } from "~/features/room/components/ParticipantAvatar";
 import { formatFileSize } from "~/features/room/utils/format-file-size";
 import { formatTransferTime } from "~/features/room/utils/format-time";
@@ -71,16 +65,22 @@ export function MessageBubble({
     >
       {!row.mine && <AuthorCaption author={row.author} />}
 
-      <div
-        className={cn(
-          "flex max-w-[min(32rem,80%)] flex-col gap-2 rounded-[var(--radius-lg)] px-3 py-2 text-sm",
-          row.mine
-            ? "bg-[var(--color-primary)] text-[var(--color-ink-on-primary)]"
-            : "border border-[var(--border)] bg-[var(--color-surface-raised)] text-[var(--color-ink)]",
-        )}
-      >
-        <BubbleBody row={row} mine={row.mine} onCopy={onCopy} />
-      </div>
+      {/* A Link gets its own preview card — its own bordered surface, so it sits
+          outside the text/file bubble rather than inside it. */}
+      {row.kind === "link" ? (
+        <LinkCard url={row.content ?? row.name} />
+      ) : (
+        <div
+          className={cn(
+            "flex max-w-[min(32rem,80%)] flex-col gap-2 rounded-[var(--radius-lg)] px-3 py-2 text-sm",
+            row.mine
+              ? "bg-[var(--color-primary)] text-[var(--color-ink-on-primary)]"
+              : "border border-[var(--border)] bg-[var(--color-surface-raised)] text-[var(--color-ink)]",
+          )}
+        >
+          <BubbleBody row={row} mine={row.mine} onCopy={onCopy} />
+        </div>
+      )}
 
       <span
         className={cn(
@@ -141,22 +141,8 @@ function BubbleBody({
     );
   }
 
-  if (row.kind === "link") {
-    const url = row.content ?? row.name;
-    return (
-      <div className="flex items-center gap-2">
-        <LinkIcon aria-hidden="true" size={18} className="shrink-0 opacity-80" />
-        <span dir="auto" title={url} className="min-w-0 flex-1 truncate underline underline-offset-2">
-          {url}
-        </span>
-        <a href={url} target="_blank" rel="noreferrer" aria-label={`Open ${url}`} className={action}>
-          <ExternalLink aria-hidden="true" size={16} />
-          Open
-        </a>
-      </div>
-    );
-  }
-
+  // A Link never reaches here — MessageBubble renders it as a LinkCard, outside
+  // this shared bubble.
   const text = row.content ?? row.name;
   return (
     <div className="flex items-end gap-2">
