@@ -68,6 +68,15 @@ export const copy = {
       "The conversation and every file are permanently gone — that's the point. Nothing is stored, nothing to clean up.",
     // What a kicked Participant (or the Sender mid-redirect) sees.
     closedMessage: "The Sender closed this Room. Start a new Room to send more.",
+    // The header presence cluster. Its accessible name frames presence as activity
+    // in the Room, never an account being "online". The visible count sits beside
+    // the avatar stack.
+    presence: {
+      active: (count: number) => `${count} people active in this Room`,
+      solo: "You're the only one active in this Room — waiting for someone to join",
+      soloCount: "Just you",
+      count: (count: number) => `${count} here`,
+    },
   },
   // The live transfer surface, split by side: what the Sender does (send a file,
   // paste text) and what the Receiver does (download, copy). Delivery is the shared
@@ -166,6 +175,11 @@ export const selectors = {
       name: copy.room.cancelDelete,
     } as const satisfies ActionableSelector,
     deleteError: { text: copy.room.deleteError } as const satisfies ReadonlySelector,
+    // The header presence roster, matched by the group's accessible name — the
+    // count-carrying variant when others are here, the solo variant when alone.
+    presence: (count: number) =>
+      ({ role: "group", name: copy.room.presence.active(count) }) as const satisfies ActionableSelector,
+    presenceSolo: { role: "group", name: copy.room.presence.solo } as const satisfies ActionableSelector,
   },
   transfer: {
     dropZoneInput: { testId: copy.transfer.dropZoneInput } as const satisfies ActionableSelector,

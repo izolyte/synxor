@@ -6,6 +6,10 @@ import type { ParticipantIdentity } from "~/features/room/constants/transfer";
 export const RoomEvent = {
   Joined: "room:joined",
   Left: "room:left",
+  // Server → Room: the live roster of present Participants (deduped by identity),
+  // plus which identity just joined or left. Drives the header cluster + count and
+  // the ephemeral join/leave notice.
+  Roster: "room:roster",
   // Client → server: the Sender tears the Room down.
   Close: "room:close",
   // Server → Room: the Room was closed; the Participant is about to be kicked.
@@ -33,6 +37,15 @@ export interface RoomPresencePayload {
 export interface RoomTypingPayload {
   identity: ParticipantIdentity;
   typing: boolean;
+}
+
+// The live presence roster plus what just changed. `roster` is one entry per
+// present identity; exactly one of `joined` / `left` is set when a Participant's
+// presence toggled (absent on the plain re-sync a late arrival receives).
+export interface RoomRosterPayload {
+  roster: ParticipantIdentity[];
+  joined?: ParticipantIdentity;
+  left?: ParticipantIdentity;
 }
 
 // Ack the server returns to a close request: success or a reason.

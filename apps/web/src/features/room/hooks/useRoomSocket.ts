@@ -7,6 +7,7 @@ import {
   type RoomCloseAck,
   type RoomPresencePayload,
   type RoomRenameAck,
+  type RoomRosterPayload,
   type RoomTypingPayload,
 } from "~/features/room/constants/room-events";
 import {
@@ -35,9 +36,25 @@ export interface RoomText {
 // recoverable in-between the UI reads as "Reconnecting…".
 export type RoomSocketStatus = "idle" | "connecting" | "connected" | "disconnected" | "lost";
 
+// A Participant just joined or left. `seq` climbs per event so the ephemeral
+// notice fires again when the same person leaves and rejoins — a bare identity
+// would look unchanged and stay silent.
+export interface PresenceChange {
+  seq: number;
+  type: "join" | "leave";
+  identity: ParticipantIdentity;
+}
+
 export interface RoomSocketState {
   status: RoomSocketStatus;
   receiverCount: number;
+  /** Present Participants (both roles, one entry per identity), for the header
+   *  cluster + count. Empty until the first roster broadcast lands. */
+  roster: ParticipantIdentity[];
+  /** The latest join/leave, with a climbing `seq` so a one-shot notice fires per
+   *  event. Null until the first presence change; never cleared (the notice reads
+   *  `seq` to know it's a new one). */
+  presenceChange: PresenceChange | null;
   /** Live Transfers in this Room, ordered by first progress event. */
   transfers: TransferProgressPayload[];
   /** Text Snippets / Links in the live stream — this client's own echoed sends
@@ -81,6 +98,8 @@ export interface RoomSocket extends RoomSocketState {
 const initialState: RoomSocketState = {
   status: "idle",
   receiverCount: 0,
+  roster: [],
+  presenceChange: null,
   transfers: [],
   texts: [],
   delivered: new Set(),
@@ -144,6 +163,27 @@ export function useRoomSocket(
       const next = Number(payload?.receiverCount);
       const count = Number.isFinite(next) && next > 0 ? Math.trunc(next) : 0;
       setState((prev) => ({ ...prev, receiverCount: count }));
+    };
+
+    // Replace the roster wholesale each broadcast (it's a full snapshot), and turn
+    // a `joined`/`left` into a climbing presence change the ephemeral notice reads.
+    // Malformed entries (no string key) are filtered so a bad build can't render a
+    // ghost avatar; a snapshot with no change field just refreshes the cluster.
+    const onRoster = (payload: RoomRosterPayload) => {
+      if (!Array.isArray(payload?.roster)) return;
+      const roster = payload.roster.filter(
+        (p): p is ParticipantIdentity => typeof p?.key === "string",
+      );
+      const changed = payload.joined ?? payload.left;
+      const type = payload.joined ? "join" : "leave";
+      setState((prev) => ({
+        ...prev,
+        roster,
+        presenceChange:
+          changed && typeof changed.key === "string"
+            ? { seq: (prev.presenceChange?.seq ?? 0) + 1, type, identity: changed }
+            : prev.presenceChange,
+      }));
     };
 
     // Upsert by transferId: progress events replace the entry in place, a new
@@ -259,6 +299,7 @@ export function useRoomSocket(
     socket.io?.on?.("reconnect_failed", onLost);
     socket.on(RoomEvent.Joined, onCount);
     socket.on(RoomEvent.Left, onCount);
+    socket.on(RoomEvent.Roster, onRoster);
     socket.on(RoomEvent.Closed, onClosed);
     socket.on(RoomEvent.IdentitySelf, onIdentitySelf);
     socket.on(RoomEvent.Identity, onIdentity);

@@ -253,6 +253,67 @@ describe('RoomGateway', () => {
     expect(receiver.connected).toBe(true);
   });
 
+  // ── Presence roster ──────────────────────────────────────────────────────
+
+  // The sender's own join fires a room:roster the instant it lands — right after
+  // connect, before anyone else is here. Attach the listener synchronously (via
+  // waitFor's `once`) the moment the socket is opened, or that first roster is
+  // delivered and dropped before the test starts listening; awaiting it then also
+  // proves the socket connected. Drains it so the next room:roster a test awaits is
+  // the one it set up.
+  function drainSelfRoster(socket: Socket): Promise<unknown> {
+    return waitFor(socket, 'room:roster');
+  }
+
+  it('broadcasts the full roster with identities, naming who joined', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await drainSelfRoster(sender);
+
+    const rosterUpdate = waitFor(sender, 'room:roster');
+    open('receiver-tok');
+
+    expect(await rosterUpdate).toEqual({
+      roster: [senderIdentity, receiverIdentity],
+      joined: receiverIdentity,
+    });
+  });
+
+  it('broadcasts the pruned roster naming who left when a Participant disconnects', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await drainSelfRoster(sender);
+
+    const receiver = open('receiver-tok');
+    await waitFor(sender, 'room:roster'); // receiver joined
+
+    const left = waitFor(sender, 'room:roster');
+    receiver.disconnect();
+
+    expect(await left).toEqual({ roster: [senderIdentity], left: receiverIdentity });
+  });
+
+  it('dedupes a Participant with two tabs and stays silent on the second', async () => {
+    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
+    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
+
+    const sender = open('sender-tok');
+    await drainSelfRoster(sender);
+
+    open('receiver-tok');
+    await waitFor(sender, 'room:roster'); // first tab: joined announced
+
+    const secondTab = waitFor(sender, 'room:roster');
+    open('receiver-tok'); // same token → same identity, a second connection
+
+    // One entry per identity, and no `joined` — the person was already here.
+    expect(await secondTab).toEqual({ roster: [senderIdentity, receiverIdentity] });
+  });
+
   // ── Room isolation ────────────────────────────────────────────────────────
 
   it('does not leak room:joined to a Sender watching a different room', async () => {

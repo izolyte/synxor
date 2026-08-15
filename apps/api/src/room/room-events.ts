@@ -6,6 +6,12 @@ import type { ParticipantIdentity } from '../domain/participant/participant-iden
 export const RoomEvent = {
   Joined: 'room:joined',
   Left: 'room:left',
+  // Server → Room: the live roster of present Participants (deduped by identity),
+  // sent on every join and leave. Carries the whole cluster so a late arrival gets
+  // the current picture, plus which identity just came or went so the client can
+  // flash an ephemeral "… joined / … left" notice. Kept separate from the
+  // receiver-count events above so the count path stays untouched.
+  Roster: 'room:roster',
   // Client → server: the Sender tears the Room down.
   Close: 'room:close',
   // Server → Room: the Room was closed; every Participant is about to be kicked.
@@ -36,6 +42,17 @@ export interface RoomPresencePayload {
 export interface RoomTypingPayload {
   identity: ParticipantIdentity;
   typing: boolean;
+}
+
+// The live presence roster plus what just changed. `roster` is every present
+// Participant, one entry per identity (a second tab doesn't double a person).
+// Exactly one of `joined` / `left` is set — the identity whose arrival or
+// departure triggered this broadcast — and only when their presence actually
+// toggled, so opening or closing a second connection stays silent.
+export interface RoomRosterPayload {
+  roster: ParticipantIdentity[];
+  joined?: ParticipantIdentity;
+  left?: ParticipantIdentity;
 }
 
 // Socket ack for a close request: success, or a reason the caller can surface.
