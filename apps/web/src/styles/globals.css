@@ -467,6 +467,21 @@
   }
 }
 
+/* Typing dots in the landing's decorative Room preview. Applied via `motion-safe:`,
+   so reduced motion holds the dots still. */
+@keyframes landing-typing {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
 @keyframes badge-pulse {
   0%,
   100% {
