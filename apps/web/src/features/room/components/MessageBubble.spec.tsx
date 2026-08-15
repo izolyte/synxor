@@ -54,15 +54,38 @@ suite("MessageBubble", () => {
     await screen.find({ text: "Sender" }).shouldNotExist();
   });
 
-  test("renders a Link as an openable, distinct affordance", async () => {
-    const url = "https://example.com/x";
+  test("renders a Link as a preview card: one safe anchor, a title and the domain", async () => {
+    const url = "https://www.figma.com/blog/design-tokens";
     const screen = renderComponent(
-      <MessageBubble row={row({ kind: "link", name: url, content: url })} />,
+      <MessageBubble row={row({ kind: "link", name: url, content: url, mine: true })} />,
     );
 
     const link = screen.find({ role: "link", name: `Open ${url}` });
     await link.shouldHaveAttribute("href", url);
     await link.shouldHaveAttribute("target", "_blank");
+    await link.shouldHaveAttribute("rel", "noopener noreferrer");
+    // Title from the path, domain with www. stripped — parsed client-side.
+    await screen.find({ text: "Design tokens" }).shouldBeVisible();
+    await screen.find({ text: "figma.com" }).shouldBeVisible();
+    // The sender's own card drops the author caption, same as any own row.
+    await screen.find({ text: "Sender" }).shouldNotExist();
+  });
+
+  test("captions an incoming Link card with its author, like any other row", async () => {
+    const url = "https://example.com/deck";
+    const screen = renderComponent(
+      <MessageBubble
+        row={row({
+          kind: "link",
+          name: url,
+          content: url,
+          author: { role: "SENDER", identity: { key: "k1", colorKey: "coral", name: "Coral Fox" } },
+        })}
+      />,
+    );
+
+    await screen.find({ text: "Coral Fox" }).shouldBeVisible();
+    await screen.find({ role: "link", name: `Open ${url}` }).shouldBeVisible();
   });
 
   test("renders a file with a download link when a href is present", async () => {

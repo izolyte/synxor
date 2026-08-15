@@ -75,6 +75,8 @@ export const copy = {
     },
     // Receiver's incoming actions.
     download: "Download",
+    // An incoming Link is one card-shaped anchor; its name is "Open <url>".
+    openLink: "Open",
     copySnippet: "Copy snippet",
     copied: "Copied",
     // Shared: the persistent per-row status, paired with an icon so it never rides
@@ -173,9 +175,13 @@ export const selectors = {
     // The status span is labelled, not roled — match it by its accessible name so
     // one selector serves both the Sender's and the Receiver's Delivered row.
     delivered: { label: copy.transfer.deliveredStatus } as const satisfies ActionableSelector,
-    // A snippet/link the Receiver received, matched by the content that was sent.
+    // A snippet the Receiver received, matched by the content that was sent.
     incomingText: (content: string) =>
       ({ text: content }) as const satisfies ReadonlySelector,
+    // A received Link renders as a preview card — the whole card is one anchor
+    // named "Open <url>", not the bare URL text a snippet carries.
+    openLink: (url: string) =>
+      ({ role: "link", name: `${copy.transfer.openLink} ${url}` }) as const satisfies ActionableSelector,
     // The shared Room stream region — scope to it when a status (Delivered) also
     // appears elsewhere, so the assertion targets exactly one element.
     log: { role: "region", name: "Room stream" } as const satisfies ActionableSelector,
