@@ -51,18 +51,27 @@ function InputOTPSlot({
       data-active={slot?.isActive || undefined}
       data-filled={slot?.char ? true : undefined}
       className={cn(
-        "relative flex aspect-square flex-1 items-center justify-center",
-        "min-h-[44px] rounded-md border border-input bg-background",
-        "font-mono text-xl font-semibold text-foreground",
+        // 46×56 cell, kept to that ratio but allowed to flex down on narrow phones
+        // (min-h holds the tap target). Radius/size match the brand join artifact.
+        "relative flex aspect-[46/56] min-h-[44px] flex-1 items-center justify-center",
+        "rounded-[11px] border border-input bg-card",
+        "font-mono text-[24px] font-semibold text-foreground",
         "transition-[color,box-shadow,border-color] duration-[var(--duration-fast)]",
-        // Filled cell picks up a teal edge; the active cell gets the focus ring.
-        "data-[filled=true]:border-primary/50",
-        "data-[active=true]:z-10 data-[active=true]:border-ring data-[active=true]:ring-2 data-[active=true]:ring-ring",
+        // Filled cell takes a faint teal edge; the active cell gets a primary edge
+        // with a soft primary-subtle halo, and dims its glyph to read as the caret.
+        "data-[filled=true]:border-primary/30",
+        "data-[active=true]:z-10 data-[active=true]:border-primary data-[active=true]:text-[var(--color-ink-subtle)] data-[active=true]:ring-[3px] data-[active=true]:ring-[var(--color-primary-subtle)]",
         className,
       )}
       {...props}
     >
       {slot?.char}
+      {/* Empty, unfocused cells carry a muted placeholder dot, like the artifact. */}
+      {!slot?.char && !slot?.isActive && (
+        <span aria-hidden="true" className="text-[var(--color-ink-subtle)]">
+          ·
+        </span>
+      )}
       {slot?.hasFakeCaret && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="h-5 w-px bg-foreground motion-safe:animate-[caret-blink_1.2s_ease-out_infinite]" />
