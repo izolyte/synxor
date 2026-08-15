@@ -32,7 +32,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
         { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
         { name: "theme-color", content: "#ffffff", media: "(prefers-color-scheme: light)" },
         { name: "theme-color", content: "#1a1a1a", media: "(prefers-color-scheme: dark)" },
-        { title: "synxor" },
+        { title: "synxor — Send it. It vanishes." },
         { name: "description", content: "Send it. It vanishes." },
         { property: "og:type", content: "website" },
         { property: "og:site_name", content: "synxor" },
