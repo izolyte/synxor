@@ -22,6 +22,7 @@ export const copy = {
       "7d": "7 days",
     },
     cta: "Create Room",
+    joinLink: "Join a Room",
     error: "Couldn't create the Room. Try again.",
   },
   joinRoom: {
@@ -92,6 +93,10 @@ export const selectors = {
     } as const satisfies ActionableSelector,
     expiryOption: (key: keyof typeof copy.createRoom.expiry) =>
       ({ role: "radio", name: copy.createRoom.expiry[key] }) as const satisfies ActionableSelector,
+    joinLink: {
+      role: "link",
+      name: copy.createRoom.joinLink,
+    } as const satisfies ActionableSelector,
     error: { text: copy.createRoom.error } as const satisfies ReadonlySelector,
   },
   joinRoom: {

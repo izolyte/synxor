@@ -52,4 +52,14 @@ suite("Create Room flow", () => {
     await driver.find(selectors.createRoom.error).shouldBeVisible();
     await driver.find(selectors.createRoom.heading).shouldBeVisible();
   });
+
+  test("offers a Receiver a path to the Join Room code entry", async () => {
+    const driver = createVitestDriver();
+    await driver.visit("/");
+
+    await driver.find(selectors.createRoom.joinLink).click();
+
+    await driver.find(selectors.joinRoom.heading).shouldBeVisible();
+    await driver.find(selectors.joinRoom.input).shouldBeVisible();
+  });
 });
