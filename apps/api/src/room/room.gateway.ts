@@ -26,8 +26,14 @@ import { hashRoomToken } from '../infrastructure/security/token-hash';
 import type { ParticipantIdentity } from '../domain/participant/participant-identity';
 import { RoomPresenceService } from './room-presence.service';
 import { RoomService } from './room.service';
-import { RoomEvent, type RoomCloseAck, type RoomRenameAck } from './room-events';
+import {
+  RoomEvent,
+  type RoomCloseAck,
+  type RoomRenameAck,
+  type RoomTypingPayload,
+} from './room-events';
 import { renameSchema } from './dto/rename.dto';
+import { typingSchema } from './dto/typing.dto';
 import type { RoomBroadcaster } from './room-broadcaster';
 
 interface ConnectedParticipant {
@@ -150,6 +156,24 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
     info.identity = identity;
     this.server.to(info.roomId).emit(RoomEvent.Identity, identity);
     return { identity };
+  }
+
+  // A Participant started or stopped composing. This is a pure ephemeral relay:
+  // no repository write, nothing in the Transfer Log — it's fanned out to the rest
+  // of the Room and forgotten. The client is trusted only for the boolean; the
+  // identity comes from the socket's own record so the indicator can't be spoofed.
+  // `socket.to` excludes the author — they don't get an indicator for their own
+  // typing. A dropped stop is backstopped by a client-side timeout on each peer.
+  @SubscribeMessage(RoomEvent.Typing)
+  handleTyping(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown): void {
+    const info = this.connected.get(socket.id);
+    if (!info) return;
+
+    const parsed = typingSchema.safeParse(body);
+    if (!parsed.success) return;
+
+    const payload: RoomTypingPayload = { identity: info.identity, typing: parsed.data.typing };
+    socket.to(info.roomId).emit(RoomEvent.TypingState, payload);
   }
 
   // The Sender ends the Room: purge its Transfers, mark it CLOSED, then evict

@@ -7,6 +7,7 @@ import {
   type RoomCloseAck,
   type RoomPresencePayload,
   type RoomRenameAck,
+  type RoomTypingPayload,
 } from "~/features/room/constants/room-events";
 import {
   TransferEvent,
@@ -54,6 +55,10 @@ export interface RoomSocketState {
   /** Latest identity per identity key, from rename broadcasts. Re-labels the
    *  messages already attributed to a peer who renamed. */
   identities: ReadonlyMap<string, ParticipantIdentity>;
+  /** Peers currently composing, keyed by identity key — drives the ephemeral
+   *  typing indicator. A peer drops out on their stop signal, when their message
+   *  lands, or after a safety timeout if the stop is lost. */
+  typing: ReadonlyMap<string, ParticipantIdentity>;
 }
 
 export interface RoomSocket extends RoomSocketState {
@@ -68,6 +73,9 @@ export interface RoomSocket extends RoomSocketState {
   /** Edits this client's display name. On success the server broadcasts the new
    *  identity to the Room; resolves with the ack (or an error with no socket). */
   rename: (name: string) => Promise<RoomRenameAck>;
+  /** Signals this client's composing state to the Room. Ephemeral and
+   *  fire-and-forget — no ack, no persistence; a no-op without a live socket. */
+  setTyping: (typing: boolean) => void;
 }
 
 const initialState: RoomSocketState = {
@@ -79,6 +87,7 @@ const initialState: RoomSocketState = {
   closed: false,
   self: undefined,
   identities: new Map(),
+  typing: new Map(),
 };
 
 // Default factory: the real socket. Tests pass a fake to drive events without a
@@ -96,6 +105,12 @@ const CLOSE_ACK_TIMEOUT_MS = 5000;
 // leaving the composer's send promise pending forever.
 const SEND_ACK_TIMEOUT_MS = 5000;
 
+// How long a peer's typing indicator lingers without a refresh before it clears
+// itself. The composer re-emits `typing: true` on a heartbeat well inside this
+// window, so a still-typing peer stays lit; a lost stop signal can't strand the
+// indicator on forever.
+const TYPING_SAFETY_TIMEOUT_MS = 6000;
+
 /**
  * Subscribes to live Room activity — Receiver presence, file progress, and
  * incoming Text/Link payloads — and exposes sendText for the Sender to push one.
@@ -108,6 +123,10 @@ export function useRoomSocket(
 ): RoomSocket {
   const [state, setState] = useState<RoomSocketState>(initialState);
   const socketRef = useRef<Socket | null>(null);
+  // Per-peer safety timers that drop a stale typing indicator if its stop signal
+  // never arrives. Held in a ref so they survive re-renders and can all be swept
+  // on teardown / token change.
+  const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
     if (!token) {
@@ -145,6 +164,10 @@ export function useRoomSocket(
     // resend carries a new transferId; a duplicate id (retransmit) is ignored.
     const onText = (payload: TransferTextPayload) => {
       if (typeof payload?.transferId !== "string") return;
+      // Their message landed — they've stopped composing, so clear any lingering
+      // indicator without waiting for a separate stop signal.
+      const authorKey = payload.author?.identity?.key;
+      if (typeof authorKey === "string") dropTyping(authorKey);
       setState((prev) =>
         prev.texts.some((t) => t.transferId === payload.transferId)
           ? prev
@@ -181,6 +204,41 @@ export function useRoomSocket(
       });
     };
 
+    // Drop a peer from the typing set and cancel its safety timer. The single
+    // exit point for a stop signal, an arriving message, and the timeout alike.
+    const dropTyping = (key: string) => {
+      const timer = typingTimers.current.get(key);
+      if (timer) {
+        clearTimeout(timer);
+        typingTimers.current.delete(key);
+      }
+      setState((prev) => {
+        if (!prev.typing.has(key)) return prev;
+        const typing = new Map(prev.typing);
+        typing.delete(key);
+        return { ...prev, typing };
+      });
+    };
+
+    // A peer's composing state. `true` lights (or refreshes) their indicator and
+    // re-arms the safety timer; `false` is the explicit stop. The identity is the
+    // server's, so it's trusted for the label.
+    const onTypingState = (payload: RoomTypingPayload) => {
+      const identity = payload?.identity;
+      if (typeof identity?.key !== "string" || typeof payload?.typing !== "boolean") return;
+      if (!payload.typing) {
+        dropTyping(identity.key);
+        return;
+      }
+      const existing = typingTimers.current.get(identity.key);
+      if (existing) clearTimeout(existing);
+      typingTimers.current.set(
+        identity.key,
+        setTimeout(() => dropTyping(identity.key), TYPING_SAFETY_TIMEOUT_MS),
+      );
+      setState((prev) => ({ ...prev, typing: new Map(prev.typing).set(identity.key, identity) }));
+    };
+
     // The Sender closed the Room. Latch it terminal so the ensuing forced
     // disconnect reads as "Room closed", not "Reconnecting…".
     const onClosed = () => setState((prev) => ({ ...prev, closed: true }));
@@ -204,6 +262,7 @@ export function useRoomSocket(
     socket.on(RoomEvent.Closed, onClosed);
     socket.on(RoomEvent.IdentitySelf, onIdentitySelf);
     socket.on(RoomEvent.Identity, onIdentity);
+    socket.on(RoomEvent.TypingState, onTypingState);
     socket.on(TransferEvent.Progress, onProgress);
     socket.on(TransferEvent.Text, onText);
     socket.on(TransferEvent.Delivered, onDelivered);
@@ -213,6 +272,10 @@ export function useRoomSocket(
       socket.off();
       socket.disconnect();
       socketRef.current = null;
+      // Sweep the per-peer typing timers so a pending one can't fire into an
+      // unmounted hook (or a fresh Room after a token change).
+      for (const timer of typingTimers.current.values()) clearTimeout(timer);
+      typingTimers.current.clear();
     };
   }, [token, factory]);
 
@@ -297,5 +360,14 @@ export function useRoomSocket(
     });
   }, []);
 
-  return { ...state, sendText, closeRoom, rename };
+  const setTyping = useCallback((typing: boolean): void => {
+    const socket = socketRef.current;
+    // Fire-and-forget: the signal is ephemeral, so a dropped emit just means one
+    // missed frame — no ack, and nothing to recover. A closed stop is backstopped
+    // by each peer's safety timeout anyway.
+    if (!socket || !socket.connected) return;
+    socket.emit(RoomEvent.Typing, { typing });
+  }, []);
+
+  return { ...state, sendText, closeRoom, rename, setTyping };
 }

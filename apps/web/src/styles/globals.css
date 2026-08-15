@@ -542,6 +542,22 @@
   }
 }
 
+/* Composing indicator dots — the three-dot "typing…" bounce, staggered per dot.
+   Applied via `motion-safe:`, so reduced-motion holds the dots still (the mock's
+   reduced-motion rule) while the indicator still reads as present. */
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
 /* Caret inside the Room Code cells. Applied via `motion-safe:`, so reduced-motion
    shows a steady caret instead of a blink. */
 @keyframes caret-blink {
