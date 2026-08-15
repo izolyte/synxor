@@ -16,6 +16,10 @@ export interface RoomSession {
   // ISO 8601, Sender only — the Receiver's join response carries no expiry. Absent
   // means no countdown source.
   expiresAt?: string;
+  // ISO 8601, captured when the Room was created. With expiresAt it gives the Room's
+  // total lifespan, which scales the countdown's approaching-Expiry warning. Absent
+  // in Receiver and legacy sessions; the warning then uses a fixed window.
+  createdAt?: string;
   // Absent in sessions stored before roles existed; sessionRole() falls back to
   // the expiresAt heuristic for those.
   role?: RoomRole;
@@ -52,6 +56,7 @@ export class RoomSessionService {
         parsed !== null &&
         typeof p.token === "string" &&
         (p.expiresAt === undefined || typeof p.expiresAt === "string") &&
+        (p.createdAt === undefined || typeof p.createdAt === "string") &&
         (p.role === undefined || p.role === "sender" || p.role === "receiver")
       ) {
         return parsed as RoomSession;

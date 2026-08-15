@@ -11,11 +11,25 @@ import { phaseFor } from "~/features/room/utils/countdown";
  * expired. Returns null when no expiry is known (e.g. a Receiver session), so the
  * caller simply omits the countdown. Formatting and urgency are delegated — this
  * hook only owns the ticking and the wiring.
+ *
+ * `createdAt` (also ISO 8601) pairs with `expiresAt` to give the Room's total
+ * lifespan, which scales the approaching-Expiry warning. It's optional: a Receiver
+ * or a legacy session without it falls back to a fixed warning window.
  */
-export function useCountdown(expiresAt: string | undefined): Countdown | null {
+export function useCountdown(
+  expiresAt: string | undefined,
+  createdAt?: string,
+): Countdown | null {
   const parsed = expiresAt ? new Date(expiresAt).getTime() : null;
   // Guard a tampered/corrupt stored value: an unparseable date → no countdown.
   const target = parsed !== null && Number.isNaN(parsed) ? null : parsed;
+
+  // Total lifespan drives the (scaled) warning threshold; null when the start is
+  // unknown or unparseable, which phaseFor reads as "use the fixed floor window".
+  const startedMs = createdAt ? new Date(createdAt).getTime() : null;
+  const lifespanMs =
+    target !== null && startedMs !== null && !Number.isNaN(startedMs) ? target - startedMs : null;
+
   const [remainingMs, setRemainingMs] = useState<number | null>(() =>
     target === null ? null : target - Date.now(),
   );
@@ -32,5 +46,5 @@ export function useCountdown(expiresAt: string | undefined): Countdown | null {
   }, live ? SECOND : null);
 
   if (remainingMs === null) return null;
-  return { label: formatDuration(remainingMs), phase: phaseFor(remainingMs) };
+  return { label: formatDuration(remainingMs), phase: phaseFor(remainingMs, lifespanMs) };
 }

@@ -12,7 +12,9 @@ import type { Countdown } from "~/features/room/types/countdown";
 export function CountdownLine({ label, phase }: Countdown) {
   return (
     <p
-      className="text-center text-sm transition-colors duration-[var(--duration-normal)] data-[phase=expired]:text-[var(--color-warning-text)] data-[phase=expiring]:text-[var(--color-warning-text)] data-[phase=live]:text-[var(--color-ink-muted)]"
+      // Mono face + tabular figures so the ticking seconds hold a fixed width and the
+      // line doesn't jitter as it counts down.
+      className="text-center font-mono text-sm tabular-nums transition-colors duration-[var(--duration-normal)] data-[phase=expired]:text-[var(--color-warning-text)] data-[phase=expiring]:text-[var(--color-warning-text)] data-[phase=live]:text-[var(--color-ink-muted)]"
       data-phase={phase}
     >
       {phase === "expired"

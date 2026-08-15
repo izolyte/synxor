@@ -28,6 +28,7 @@ export function RoomPage() {
       <RoomShareView
         roomCode={roomCode}
         expiresAt={session.session.expiresAt}
+        createdAt={session.session.createdAt}
         token={session.session.token}
         role={sessionRole(session.session)}
         transferHistory={transferHistory}
