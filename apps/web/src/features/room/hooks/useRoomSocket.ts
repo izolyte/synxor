@@ -6,9 +6,11 @@ import {
   RoomEvent,
   type RoomCloseAck,
   type RoomPresencePayload,
+  type RoomRenameAck,
 } from "~/features/room/constants/room-events";
 import {
   TransferEvent,
+  type ParticipantIdentity,
   type SendTextAck,
   type TransferAuthor,
   type TransferDeliveredPayload,
@@ -46,6 +48,12 @@ export interface RoomSocketState {
   /** True once the server broadcasts room:closed — the Room was torn down and
    *  this Participant is being kicked. Terminal: the UI shows a closed notice. */
   closed: boolean;
+  /** This client's own identity (colour + name), once the server assigns it on
+   *  join. Undefined until connected. */
+  self: ParticipantIdentity | undefined;
+  /** Latest identity per identity key, from rename broadcasts. Re-labels the
+   *  messages already attributed to a peer who renamed. */
+  identities: ReadonlyMap<string, ParticipantIdentity>;
 }
 
 export interface RoomSocket extends RoomSocketState {
@@ -57,6 +65,9 @@ export interface RoomSocket extends RoomSocketState {
   /** Sender-only: closes the Room, kicking every Participant. Resolves with the
    *  server's ack (or an error when there's no live socket). */
   closeRoom: () => Promise<RoomCloseAck>;
+  /** Edits this client's display name. On success the server broadcasts the new
+   *  identity to the Room; resolves with the ack (or an error with no socket). */
+  rename: (name: string) => Promise<RoomRenameAck>;
 }
 
 const initialState: RoomSocketState = {
@@ -66,6 +77,8 @@ const initialState: RoomSocketState = {
   texts: [],
   delivered: new Set(),
   closed: false,
+  self: undefined,
+  identities: new Map(),
 };
 
 // Default factory: the real socket. Tests pass a fake to drive events without a
@@ -150,6 +163,24 @@ export function useRoomSocket(
       });
     };
 
+    // This client's own identity, assigned on join.
+    const onIdentitySelf = (identity: ParticipantIdentity) => {
+      if (typeof identity?.key !== "string") return;
+      setState((prev) => ({ ...prev, self: identity }));
+    };
+
+    // A peer (or this client) renamed. Track the latest identity per key so the
+    // stream re-labels every message already attributed to it, and keep `self` in
+    // step when the rename is our own.
+    const onIdentity = (identity: ParticipantIdentity) => {
+      if (typeof identity?.key !== "string") return;
+      setState((prev) => {
+        const identities = new Map(prev.identities).set(identity.key, identity);
+        const self = prev.self?.key === identity.key ? identity : prev.self;
+        return { ...prev, identities, self };
+      });
+    };
+
     // The Sender closed the Room. Latch it terminal so the ensuing forced
     // disconnect reads as "Room closed", not "Reconnecting…".
     const onClosed = () => setState((prev) => ({ ...prev, closed: true }));
@@ -171,6 +202,8 @@ export function useRoomSocket(
     socket.on(RoomEvent.Joined, onCount);
     socket.on(RoomEvent.Left, onCount);
     socket.on(RoomEvent.Closed, onClosed);
+    socket.on(RoomEvent.IdentitySelf, onIdentitySelf);
+    socket.on(RoomEvent.Identity, onIdentity);
     socket.on(TransferEvent.Progress, onProgress);
     socket.on(TransferEvent.Text, onText);
     socket.on(TransferEvent.Delivered, onDelivered);
@@ -235,5 +268,34 @@ export function useRoomSocket(
     });
   }, []);
 
-  return { ...state, sendText, closeRoom };
+  const rename = useCallback((name: string): Promise<RoomRenameAck> => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) return Promise.resolve({ error: "No connection" });
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (ack: RoomRenameAck) => {
+        if (settled) return;
+        settled = true;
+        // The server also broadcasts the new identity (onIdentity handles it), but
+        // apply it here too so the sender's own name updates without waiting for a
+        // round-trip through the broadcast.
+        if ("identity" in ack) {
+          const identity = ack.identity;
+          setState((prev) => ({
+            ...prev,
+            self: identity,
+            identities: new Map(prev.identities).set(identity.key, identity),
+          }));
+        }
+        resolve(ack);
+      };
+      const timer = setTimeout(() => finish({ error: "No response" }), SEND_ACK_TIMEOUT_MS);
+      socket.emit(RoomEvent.Rename, { name }, (ack: RoomRenameAck) => {
+        clearTimeout(timer);
+        finish(ack ?? { error: "No response" });
+      });
+    });
+  }, []);
+
+  return { ...state, sendText, closeRoom, rename };
 }

@@ -27,6 +27,25 @@ export class PrismaParticipantRepository implements ParticipantRepository {
     return participants.map((p) => this.toEntity(p));
   }
 
+  async findDisplayName(roomId: string, tokenHash: string): Promise<string | null> {
+    const row = await this.prisma.participant.findFirst({
+      where: { roomId, tokenHash, displayName: { not: null } },
+      select: { displayName: true },
+    });
+    return row?.displayName ?? null;
+  }
+
+  async setDisplayName(
+    roomId: string,
+    tokenHash: string,
+    displayName: string | null,
+  ): Promise<void> {
+    await this.prisma.participant.updateMany({
+      where: { roomId, tokenHash },
+      data: { displayName },
+    });
+  }
+
   async setDisconnected(id: string, at: Date): Promise<Participant> {
     await this.prisma.participant.updateMany({
       where: { id, disconnectedAt: null },
@@ -57,6 +76,7 @@ export class PrismaParticipantRepository implements ParticipantRepository {
       roomId: p.roomId,
       role: assertParticipantRole(p.role),
       tokenHash: p.tokenHash,
+      displayName: p.displayName,
       joinedAt: p.joinedAt,
       disconnectedAt: p.disconnectedAt,
     };

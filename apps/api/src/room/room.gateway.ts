@@ -23,15 +23,23 @@ import {
   type TransferTextAck,
 } from '../transfer/transfer-events';
 import { hashRoomToken } from '../infrastructure/security/token-hash';
+import type { ParticipantIdentity } from '../domain/participant/participant-identity';
 import { RoomPresenceService } from './room-presence.service';
 import { RoomService } from './room.service';
-import { RoomEvent, type RoomCloseAck } from './room-events';
+import { RoomEvent, type RoomCloseAck, type RoomRenameAck } from './room-events';
+import { renameSchema } from './dto/rename.dto';
 import type { RoomBroadcaster } from './room-broadcaster';
 
 interface ConnectedParticipant {
   participantId: string;
   roomId: string;
   role: ParticipantRole;
+  // The stable key behind this identity — updates to the name fan out across every
+  // connection row sharing it.
+  tokenHash: string;
+  // Held live so each broadcast Transfer carries the author's current identity
+  // without a per-message lookup; a rename mutates it in place.
+  identity: ParticipantIdentity;
 }
 
 // CORS for the underlying Socket.io server is configured by ConfigurableIoAdapter
@@ -86,7 +94,7 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
       transferId,
       payloadType,
       content,
-      author: { role: info.role },
+      author: { role: info.role, identity: info.identity },
     };
     // `socket.to` excludes the author — they already have it and get the ack.
     socket.to(info.roomId).emit(TransferEvent.Text, payload);
@@ -108,6 +116,40 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
       authorParticipantId: author.participantId,
     });
     return transfer.id;
+  }
+
+  // Any Participant edits their own display name. Persisted across every
+  // connection row of the identity, mirrored onto this socket's live identity so
+  // subsequent Transfers carry it, then broadcast so peers re-label the messages
+  // already attributed to this identity. A blank name reverts to the auto name.
+  @SubscribeMessage(RoomEvent.Rename)
+  async handleRename(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: unknown,
+  ): Promise<RoomRenameAck> {
+    const info = this.connected.get(socket.id);
+    if (!info) return { error: 'Join the Room before renaming' };
+
+    const parsed = renameSchema.safeParse(body);
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid name' };
+    }
+
+    let identity: ParticipantIdentity;
+    try {
+      identity = await this.presence.rename({
+        roomId: info.roomId,
+        tokenHash: info.tokenHash,
+        displayName: parsed.data.name,
+      });
+    } catch (err) {
+      this.logger.error(`Failed to rename Participant in Room ${info.roomId}`, err);
+      return { error: 'Could not save your name — try again' };
+    }
+
+    info.identity = identity;
+    this.server.to(info.roomId).emit(RoomEvent.Identity, identity);
+    return { identity };
   }
 
   // The Sender ends the Room: purge its Transfers, mark it CLOSED, then evict
@@ -168,13 +210,15 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
     const nsp: Namespace = socket.nsp;
     socket.on('disconnecting', () => void this.onParticipantLeft(nsp, socket.id));
 
+    const tokenHash = hashRoomToken(token);
     let participantId: string;
     let receiverCount: number;
+    let identity: ParticipantIdentity;
     try {
-      ({ participantId, receiverCount } = await this.presence.recordJoin({
+      ({ participantId, receiverCount, identity } = await this.presence.recordJoin({
         roomId,
         role: participantRole,
-        tokenHash: hashRoomToken(token),
+        tokenHash,
       }));
       await socket.join(roomId);
     } catch (err) {
@@ -183,7 +227,16 @@ export class RoomGateway implements OnGatewayConnection, RoomBroadcaster {
       return;
     }
 
-    this.connected.set(socket.id, { participantId, roomId, role: participantRole });
+    this.connected.set(socket.id, {
+      participantId,
+      roomId,
+      role: participantRole,
+      tokenHash,
+      identity,
+    });
+
+    // Tell the joiner who they are so the UI can show it and offer a rename.
+    socket.emit(RoomEvent.IdentitySelf, identity);
 
     if (participantRole === 'RECEIVER') {
       this.server.to(roomId).emit(RoomEvent.Joined, { receiverCount });

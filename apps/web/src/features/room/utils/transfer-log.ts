@@ -1,5 +1,6 @@
 import type { RoomText } from "~/features/room/hooks/useRoomSocket";
 import type {
+  ParticipantIdentity,
   TransferAuthor,
   TransferProgressPayload,
 } from "~/features/room/constants/transfer";
@@ -42,9 +43,10 @@ function snippetPreview(content: string): string {
   return content.replace(/\s+/g, " ").trim();
 }
 
-// Files ride HTTP with no socket Participant, so they carry no author row — but
-// only the Sender uploads, so a file is the Sender's, and it's "yours" iff you
-// are the Sender.
+// Files ride HTTP with no socket Participant, so a live file row carries no
+// identity — but only the Sender uploads, so a file is the Sender's, and it's
+// "yours" iff you are the Sender. History rows carry the Sender's resolved
+// identity from the server; this is the live fallback (bare role) until then.
 function fileAuthor(isSender: boolean): TransferAuthor | null {
   return isSender ? null : { role: "SENDER" };
 }
@@ -88,7 +90,9 @@ function historyRow(
       status: item.delivered ? "delivered" : "in_progress",
       sizeBytes: item.fileSizeBytes ?? undefined,
       href: downloadHref?.(item.id, name),
-      author: fileAuthor(isSender),
+      // The server attributes a file to the Room Sender (identity and all); the
+      // Sender's own files stay uncaptioned.
+      author: isSender ? null : (item.author ?? { role: "SENDER" }),
       mine: isSender,
       receivedAt,
     };
@@ -143,7 +147,22 @@ export interface MergeTransferLogInput {
   isSender: boolean;
   /** First-seen wall-clock time per live transferId; the socket carries none. */
   liveTimestamps: ReadonlyMap<string, number>;
+  /** Latest identity per identity key, from rename broadcasts — re-labels every
+   *  message already attributed to a peer who renamed, keyed by identity.key. */
+  identityOverrides?: ReadonlyMap<string, ParticipantIdentity>;
   downloadHref?: DownloadHref;
+}
+
+// Re-point a row's author at the peer's latest identity after a rename. Colour and
+// key are stable, so only the name really moves — but replacing the whole
+// descriptor keeps this correct if that ever changes.
+function withIdentityOverride(
+  author: TransferAuthor | null,
+  overrides: ReadonlyMap<string, ParticipantIdentity>,
+): TransferAuthor | null {
+  if (!author?.identity) return author;
+  const latest = overrides.get(author.identity.key);
+  return latest ? { ...author, identity: latest } : author;
 }
 
 /**
@@ -163,6 +182,7 @@ export function mergeTransferLog({
   ownIds,
   isSender,
   liveTimestamps,
+  identityOverrides,
   downloadHref,
 }: MergeTransferLogInput): TransferLogRow[] {
   const rows = new Map<string, TransferLogRow>();
@@ -199,5 +219,10 @@ export function mergeTransferLog({
     overlay(liveTextRow(payload, at));
   }
 
-  return [...rows.values()].sort((a, b) => a.receivedAt - b.receivedAt);
+  const ordered = [...rows.values()].sort((a, b) => a.receivedAt - b.receivedAt);
+  if (!identityOverrides?.size) return ordered;
+  return ordered.map((row) => ({
+    ...row,
+    author: withIdentityOverride(row.author, identityOverrides),
+  }));
 }

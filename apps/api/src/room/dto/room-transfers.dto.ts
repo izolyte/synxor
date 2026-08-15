@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ROOM_CODE_PATTERN } from '../../domain/room/room-code';
 import type { PayloadType } from '../../domain/transfer/transfer.entity';
 import type { ParticipantRole } from '../../domain/participant/participant.entity';
+import type { ParticipantIdentity } from '../../domain/participant/participant-identity';
 
 // Use-case I/O contract for reading a Room's Transfer history. Lives in the
 // application layer so any transport validates against the same shape.
@@ -17,12 +18,13 @@ export type RoomTransfersRequest = z.infer<typeof roomTransfersSchema>;
 // not a persisted status column. bigint sizes are narrowed to number and the
 // timestamp to an ISO string here — the tRPC link runs no transformer, so the
 // wire payload must be plain JSON (raw bigint would throw on serialize).
-// Who created a Transfer, resolved from its author Participant. Just the role for
-// now — enough for the stream to attribute a message; #102 extends this with a
-// stable per-author identity (colour + name). Null when the row has no author
-// (file uploads, legacy rows).
+// Who created a Transfer, resolved from its author Participant: the role plus the
+// author's stable identity (colour + name) for attribution in the stream.
+// `identity` is null only when no author is resolvable (e.g. a file in a Room with
+// no recorded Sender). The whole author is null for rows that never had one.
 export interface TransferAuthor {
   role: ParticipantRole;
+  identity: ParticipantIdentity | null;
 }
 
 export interface RoomTransferItem {

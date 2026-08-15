@@ -19,7 +19,7 @@ function row(over: Partial<TransferLogRow> = {}): TransferLogRow {
 }
 
 suite("MessageBubble", () => {
-  test("labels an incoming message with its author's role and copies its text", async () => {
+  test("labels an incoming message with its author's role when no identity is known", async () => {
     const onCopy = vi.fn();
     const screen = renderComponent(
       <MessageBubble row={row({ author: { role: "RECEIVER" } })} onCopy={onCopy} />,
@@ -29,6 +29,22 @@ suite("MessageBubble", () => {
     await screen.find({ text: "hello" }).shouldBeVisible();
     await screen.find({ role: "button", name: "Copy hello" }).click();
     expect(onCopy).toHaveBeenCalledWith("hello");
+  });
+
+  test("captions an incoming message with the author's identity name over the bare role", async () => {
+    const screen = renderComponent(
+      <MessageBubble
+        row={row({
+          author: {
+            role: "RECEIVER",
+            identity: { key: "k1", colorKey: "indigo", name: "Indigo Heron" },
+          },
+        })}
+      />,
+    );
+
+    await screen.find({ text: "Indigo Heron" }).shouldBeVisible();
+    await screen.find({ text: "Receiver" }).shouldNotExist();
   });
 
   test("marks the sender's own delivered message as Seen and drops the author caption", async () => {

@@ -39,12 +39,25 @@ export interface TransferDeliveredPayload {
 
 export type TextPayloadType = "TEXT_SNIPPET" | "LINK";
 
-// Who sent a Transfer. Role only for now — enough to attribute a message in the
-// stream; #102 layers a stable per-author identity (colour + name) on top.
+// Who sent a Transfer. `role` still drives the file-attribution fallback; the
+// stream now labels messages by the author's stable identity.
 export type TransferAuthorRole = "SENDER" | "RECEIVER";
+
+// A peer's shared display identity. Mirror of the API's ParticipantIdentity
+// (apps/api's domain/participant/participant-identity.ts) — assigned server-side,
+// so `colorKey` maps to a --identity-<colorKey> token the FE owns. `key` is the
+// stable id used to re-label a peer's messages after they rename.
+export interface ParticipantIdentity {
+  key: string;
+  colorKey: string;
+  name: string;
+}
 
 export interface TransferAuthor {
   role: TransferAuthorRole;
+  // Absent only for a live file row before the Sender's identity is known; the
+  // bubble falls back to the bare role then.
+  identity?: ParticipantIdentity | null;
 }
 
 export interface TransferTextPayload {

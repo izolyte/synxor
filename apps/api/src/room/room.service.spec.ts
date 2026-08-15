@@ -12,6 +12,7 @@ import { InMemoryRoomRepository } from '../domain/room/room.repository.fake';
 import { FakeTransferRepository } from '../domain/transfer/transfer.repository.fake';
 import { FakeDeliveryRepository } from '../domain/delivery/delivery.repository.fake';
 import { InMemoryParticipantRepository } from '../domain/participant/participant.repository.fake';
+import { deriveIdentity } from '../domain/participant/participant-identity';
 import { FakeObjectStorage } from '../domain/storage/object-storage.fake';
 import type { Room } from '../domain/room/room.entity';
 import type { CodeGenerator } from '../domain/security/code-generator';
@@ -312,7 +313,7 @@ describe('RoomService.transfers', () => {
     });
   });
 
-  it('attributes a Transfer to its author Participant', async () => {
+  it('attributes a Transfer to its author Participant with a stable identity', async () => {
     const { service, repo, transfers, participants } = setup([]);
     const room = seedRoom(repo, { code: 'LOG004' });
     const author = await participants.create({
@@ -329,8 +330,39 @@ describe('RoomService.transfers', () => {
     });
 
     const [item] = await service.listTransfers('LOG004');
-    expect(item.author).toEqual({ role: 'RECEIVER' });
+    expect(item.author).toEqual({ role: 'RECEIVER', identity: deriveIdentity('hash-1') });
     expect(item.id).toBe(transfer.id);
+  });
+
+  it('attributes a file Transfer to the Room Sender identity even with no author row', async () => {
+    const { service, repo, transfers, participants } = setup([]);
+    const room = seedRoom(repo, { code: 'LOG005' });
+    await participants.create({ roomId: room.id, role: 'SENDER', tokenHash: 'sender-hash' });
+    await transfers.create({ roomId: room.id, payloadType: 'FILE', contentLength: BigInt(4) });
+
+    const [item] = await service.listTransfers('LOG005');
+    expect(item.author).toEqual({ role: 'SENDER', identity: deriveIdentity('sender-hash') });
+  });
+
+  it('reflects an edited display name in a Transfer author', async () => {
+    const { service, repo, transfers, participants } = setup([]);
+    const room = seedRoom(repo, { code: 'LOG006' });
+    const author = await participants.create({
+      roomId: room.id,
+      role: 'RECEIVER',
+      tokenHash: 'hash-2',
+    });
+    await participants.setDisplayName(room.id, 'hash-2', 'Alice');
+    await transfers.createTextTransfer({
+      roomId: room.id,
+      payloadType: 'TEXT_SNIPPET',
+      content: 'named',
+      contentLength: BigInt(5),
+      authorParticipantId: author.id,
+    });
+
+    const [item] = await service.listTransfers('LOG006');
+    expect(item.author?.identity?.name).toBe('Alice');
   });
 
   it('marks a Transfer delivered once a Delivery row exists', async () => {

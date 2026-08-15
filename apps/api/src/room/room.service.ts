@@ -22,9 +22,10 @@ import {
   type ParticipantRepository,
 } from '../domain/participant/participant.repository';
 import { OBJECT_STORAGE, type ObjectStorage } from '../domain/storage/object-storage';
+import { deriveIdentity } from '../domain/participant/participant-identity';
 import type { CreateRoomResult } from './dto/create-room.dto';
 import type { JoinRoomResult } from './dto/join-room.dto';
-import type { RoomTransfersResult } from './dto/room-transfers.dto';
+import type { RoomTransfersResult, TransferAuthor } from './dto/room-transfers.dto';
 import { ROOM_CODE_MAX_ATTEMPTS } from '../domain/room/room-code';
 import { type Expiry, resolveExpiresAt } from '../domain/room/room-expiry';
 import { CODE_GENERATOR, type CodeGenerator } from '../domain/security/code-generator';
@@ -94,6 +95,13 @@ export class RoomService {
 
     const transfers = await this.transfers.findByRoomId(room.id);
     const transferIds = transfers.map((t) => t.id);
+
+    // Files ride HTTP with no author row, so a file's author is the Room's Sender.
+    // Resolve it from any Sender Participant only when there's an unattributed file
+    // to attribute — the common text-only Log skips the extra read.
+    const hasUnauthoredFile = transfers.some(
+      (t) => t.payloadType === 'FILE' && t.authorParticipantId === null,
+    );
     const authorIds = [
       ...new Set(
         transfers.map((t) => t.authorParticipantId).filter((id): id is string => id !== null),
@@ -102,16 +110,22 @@ export class RoomService {
 
     // Batched reads instead of a round-trip set per Transfer — the Log grows
     // with the Room, so N+1 here scales with session length.
-    const [filePayloads, textPayloads, deliveries, authors] = await Promise.all([
+    const [filePayloads, textPayloads, deliveries, authors, roomParticipants] = await Promise.all([
       this.transfers.findFilePayloadsByTransferIds(transferIds),
       this.transfers.findTextPayloadsByTransferIds(transferIds),
       this.deliveries.findByTransferIds(transferIds),
       this.participants.findByIds(authorIds),
+      hasUnauthoredFile ? this.participants.findByRoomId(room.id) : Promise.resolve([]),
     ]);
     const filePayloadByTransferId = new Map(filePayloads.map((fp) => [fp.transferId, fp]));
     const textPayloadByTransferId = new Map(textPayloads.map((tp) => [tp.transferId, tp]));
     const deliveredTransferIds = new Set(deliveries.map((d) => d.transferId));
     const authorById = new Map(authors.map((a) => [a.id, a]));
+
+    const sender = roomParticipants.find((p) => p.role === 'SENDER');
+    const senderAuthor: TransferAuthor | null = sender
+      ? { role: 'SENDER', identity: deriveIdentity(sender.tokenHash, sender.displayName) }
+      : null;
 
     return transfers.map((transfer) => {
       const filePayload = filePayloadByTransferId.get(transfer.id) ?? null;
@@ -119,6 +133,11 @@ export class RoomService {
       const author = transfer.authorParticipantId
         ? authorById.get(transfer.authorParticipantId)
         : null;
+      const resolvedAuthor: TransferAuthor | null = author
+        ? { role: author.role, identity: deriveIdentity(author.tokenHash, author.displayName) }
+        : transfer.payloadType === 'FILE'
+          ? senderAuthor
+          : null;
       return {
         id: transfer.id,
         payloadType: transfer.payloadType,
@@ -127,7 +146,7 @@ export class RoomService {
         // well under Number.MAX_SAFE_INTEGER (the upload cap is far below it).
         fileSizeBytes: filePayload ? Number(filePayload.fileSizeBytes) : null,
         content: textPayload?.content ?? null,
-        author: author ? { role: author.role } : null,
+        author: resolvedAuthor,
         delivered: deliveredTransferIds.has(transfer.id),
         createdAt: transfer.createdAt.toISOString(),
       };

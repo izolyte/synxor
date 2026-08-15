@@ -2,7 +2,12 @@ import { expect } from "vitest";
 import { suite, test } from "~test/kit";
 import { mergeTransferLog, type TransferHistory } from "~/features/room/utils/transfer-log";
 import type { RoomText } from "~/features/room/hooks/useRoomSocket";
-import type { TransferProgressPayload } from "~/features/room/constants/transfer";
+import type {
+  ParticipantIdentity,
+  TransferProgressPayload,
+} from "~/features/room/constants/transfer";
+
+const receiverId: ParticipantIdentity = { key: "rx", colorKey: "violet", name: "Violet Otter" };
 
 function historyFile(over: Partial<TransferHistory[number]> = {}): TransferHistory[number] {
   return {
@@ -25,7 +30,7 @@ function historyText(over: Partial<TransferHistory[number]> = {}): TransferHisto
     fileName: null,
     fileSizeBytes: null,
     content: "saved note",
-    author: { role: "RECEIVER" },
+    author: { role: "RECEIVER", identity: receiverId },
     delivered: true,
     createdAt: "2026-01-01T10:05:00.000Z",
     ...over,
@@ -152,13 +157,35 @@ suite("mergeTransferLog", () => {
     });
   });
 
-  test("carries a history row's author through for attribution", () => {
+  test("carries a history row's author and identity through for attribution", () => {
     const [row] = mergeTransferLog({
-      history: [historyText({ author: { role: "RECEIVER" } })],
+      history: [historyText({ author: { role: "RECEIVER", identity: receiverId } })],
       ...noLive,
     });
-    expect(row.author).toEqual({ role: "RECEIVER" });
+    expect(row.author).toEqual({ role: "RECEIVER", identity: receiverId });
     expect(row.mine).toBe(false);
+  });
+
+  test("attributes a file history row to the Sender identity the server resolved", () => {
+    const senderId: ParticipantIdentity = { key: "sx", colorKey: "gold", name: "Gold Finch" };
+    const [row] = mergeTransferLog({
+      history: [historyFile({ author: { role: "SENDER", identity: senderId } })],
+      ...noLive,
+      isSender: false,
+    });
+    expect(row.author).toEqual({ role: "SENDER", identity: senderId });
+  });
+
+  test("re-labels a peer's messages after they rename, keyed by identity", () => {
+    const renamed: ParticipantIdentity = { ...receiverId, name: "Alice" };
+    const [row] = mergeTransferLog({
+      history: [historyText({ author: { role: "RECEIVER", identity: receiverId } })],
+      ...noLive,
+      identityOverrides: new Map([[receiverId.key, renamed]]),
+    });
+    expect(row.author?.identity?.name).toBe("Alice");
+    // The colour is untouched by a rename.
+    expect(row.author?.identity?.colorKey).toBe("violet");
   });
 
   test("marks a history row mine when this client recorded sending it", () => {
