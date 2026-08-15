@@ -17,9 +17,15 @@ import { MAX_TEXT_PAYLOAD_CHARS } from "~/features/room/constants/transfer";
 export function TextPasteField({
   onSend,
   disabled = false,
+  onComposing,
+  onComposingStop,
 }: {
   onSend: (text: string) => void;
   disabled?: boolean;
+  /** Called on each edit, to drive the ephemeral typing signal. */
+  onComposing?: () => void;
+  /** Called on send, to retract the typing signal at once. */
+  onComposingStop?: () => void;
 }) {
   const [text, setText] = useState("");
   const tooLong = text.length > MAX_TEXT_PAYLOAD_CHARS;
@@ -30,6 +36,9 @@ export function TextPasteField({
     if (!canSend) return;
     onSend(text);
     setText("");
+    // The message is on its way — stop composing now rather than waiting for the
+    // idle timeout to lapse.
+    onComposingStop?.();
   }
 
   return (
@@ -42,7 +51,12 @@ export function TextPasteField({
     >
       <textarea
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          // Only signal real composing — a disabled field can still fire change
+          // on a programmatic reset, which isn't the Participant typing.
+          if (!disabled) onComposing?.();
+        }}
         onKeyDown={(e) => {
           // Enter sends; Shift+Enter (and IME composition) fall through to a newline.
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

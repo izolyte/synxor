@@ -18,11 +18,24 @@ export const RoomEvent = {
   Identity: 'room:identity',
   // Client → server: edit this Participant's display name.
   Rename: 'room:rename',
+  // Client → server: this Participant started/stopped composing. Ephemeral — a
+  // pure relay, never persisted or logged.
+  Typing: 'room:typing',
+  // Server → Room: a peer's live composing state, attributed to their identity,
+  // so the others can show (or clear) a typing indicator.
+  TypingState: 'room:typing:state',
 } as const;
 export type RoomEvent = (typeof RoomEvent)[keyof typeof RoomEvent];
 
 export interface RoomPresencePayload {
   receiverCount: number;
+}
+
+// A peer's composing state, fanned out to the rest of the Room. `typing` false is
+// the explicit stop (on send or idle); the identity attributes the indicator.
+export interface RoomTypingPayload {
+  identity: ParticipantIdentity;
+  typing: boolean;
 }
 
 // Socket ack for a close request: success, or a reason the caller can surface.

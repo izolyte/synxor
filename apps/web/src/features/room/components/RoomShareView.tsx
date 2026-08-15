@@ -11,11 +11,13 @@ import { DropZone } from "~/features/room/components/DropZone";
 import { TextPasteField } from "~/features/room/components/TextPasteField";
 import { SelfIdentity } from "~/features/room/components/SelfIdentity";
 import { RoomStream } from "~/features/room/components/RoomStream";
+import { TypingIndicator } from "~/features/room/components/TypingIndicator";
 import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
 import { ExpiryWarningNotice } from "~/features/room/components/ExpiryWarningNotice";
 import { DeleteRoomControl } from "~/features/room/components/DeleteRoomControl";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
 import { useRoomSocket, type SocketFactory } from "~/features/room/hooks/useRoomSocket";
+import { useComposingSignal } from "~/features/room/hooks/useComposingSignal";
 import { useOwnTransferIds } from "~/features/room/hooks/useOwnTransferIds";
 import type { Uploader } from "~/features/room/hooks/useFileUploads";
 import { useTransferLogRows } from "~/features/room/hooks/useTransferLog";
@@ -79,10 +81,13 @@ export function RoomShareView({
     closed,
     self,
     identities,
+    typing,
     sendText,
     closeRoom,
     rename,
+    setTyping,
   } = useRoomSocket(socketToken, socketFactory);
+  const composing = useComposingSignal(setTyping);
   const apiOrigin = socketToken ? resolveApiOrigin(import.meta.env) : undefined;
 
   const [senderUploading, setSenderUploading] = useState(false);
@@ -186,6 +191,10 @@ export function RoomShareView({
 
         <RoomStream rows={rows} onCopy={clipboard.copy} />
 
+        {/* Ephemeral — sits at the foot of the stream, above the composer, and is
+            never part of the persisted feed. */}
+        <TypingIndicator identities={[...typing.values()]} />
+
         <footer className="flex shrink-0 flex-col gap-3 border-t border-[var(--border)] py-3">
           {isSender && (
             <DropZone
@@ -199,7 +208,12 @@ export function RoomShareView({
           <SelfIdentity self={self} onRename={rename} />
           {/* Past the Expiry the Room is held open only to land an in-flight
               Transfer — seal the composer so nothing new goes into a dead Room. */}
-          <TextPasteField onSend={handleSend} disabled={expired} />
+          <TextPasteField
+            onSend={handleSend}
+            disabled={expired}
+            onComposing={composing.notify}
+            onComposingStop={composing.stop}
+          />
         </footer>
       </main>
 
