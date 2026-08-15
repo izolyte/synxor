@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Wordmark } from "~/shared/components/Wordmark";
-import { CenteredScreen } from "~/shared/components/CenteredScreen";
-import { ScreenColumn } from "~/shared/components/ScreenColumn";
 import { CopyButton } from "~/features/room/components/CopyButton";
 import { CountdownLine } from "~/features/room/components/CountdownLine";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
 import { ConnectionAlert } from "~/features/room/components/ConnectionAlert";
-import { RoomNotice } from "~/features/room/components/RoomNotice";
+import { TerminalNotice } from "~/features/room/components/TerminalNotice";
 import { DropZone } from "~/features/room/components/DropZone";
 import { TextPasteField } from "~/features/room/components/TextPasteField";
 import { SelfIdentity } from "~/features/room/components/SelfIdentity";
@@ -121,21 +119,11 @@ export function RoomShareView({
   );
 
   if (closed) {
-    return (
-      <TerminalNotice
-        title="Room closed"
-        message="The Sender closed this Room. Create a new Room to send files."
-      />
-    );
+    return <TerminalNotice variant="closed" />;
   }
 
   if (sealed || (expired && !transferActive)) {
-    return (
-      <TerminalNotice
-        title="Room expired"
-        message="This Room reached its Expiry — every Transfer in it is gone. Create a new Room to send more."
-      />
-    );
+    return <TerminalNotice variant="expired" />;
   }
 
   const joinUrl = buildUrl("/join", { code: roomCode });
@@ -223,17 +211,5 @@ export function RoomShareView({
       {/* One-shot heads-up as the Room nears Expiry — fires once, then clears. */}
       <ExpiryWarningNotice phase={countdown?.phase} />
     </div>
-  );
-}
-
-// Terminal Room states keep the app's centered narrow layout — only the live Room
-// takes over the full-height shell.
-function TerminalNotice({ title, message }: { title: string; message: string }) {
-  return (
-    <CenteredScreen>
-      <ScreenColumn>
-        <RoomNotice title={title} message={message} />
-      </ScreenColumn>
-    </CenteredScreen>
   );
 }

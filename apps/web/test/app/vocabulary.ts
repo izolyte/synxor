@@ -40,10 +40,10 @@ export const copy = {
   room: {
     heading: {
       ready: "Room ready",
-      expired: "Room expired",
-      closed: "Room closed",
+      expired: "This Room has expired",
+      closed: "This Room is closed",
       // No held session for the code — the helper that offers the way in.
-      codeRequired: "Room Code required",
+      codeRequired: "This Room needs its code",
     },
     copyCode: "Copy code",
     copiedCode: "Copied",
@@ -51,9 +51,9 @@ export const copy = {
     copiedLink: "Link copied",
     waiting: "Waiting for Receiver",
     connected: "Receiver connected",
-    createNew: "Create a new Room",
-    // The no-session helper's way in: join with the code, prefilled from the link.
-    joinWithCode: "Join with the code",
+    createNew: "Start a new Room",
+    // The no-session helper's way in: enter the code, prefilled from the link.
+    joinWithCode: "Enter a code",
     // Sender's teardown control and its two-step confirm.
     deleteRoom: "Delete Room",
     confirmDelete: "Yes, delete",
@@ -61,9 +61,9 @@ export const copy = {
     deleteError: "Couldn't close the Room — try again.",
     // The two terminal Room states a Participant lands on.
     expiredMessage:
-      "This Room reached its Expiry — every Transfer in it is gone. Create a new Room to send more.",
+      "The conversation and every file are permanently gone — that's the point. Nothing is stored, nothing to clean up.",
     // What a kicked Participant (or the Sender mid-redirect) sees.
-    closedMessage: "The Sender closed this Room. Create a new Room to send files.",
+    closedMessage: "The Sender closed this Room. Start a new Room to send more.",
   },
   // The live transfer surface, split by side: what the Sender does (send a file,
   // paste text) and what the Receiver does (download, copy). Delivery is the shared
