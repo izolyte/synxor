@@ -1,4 +1,6 @@
 {
+  "id": "/",
+  "scope": "/",
   "name": "synxor",
   "short_name": "synxor",
   "description": "Send it. It vanishes.",
@@ -20,6 +22,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Room",
+      "short_name": "New Room",
+      "description": "Start a new Room to send files.",
+      "url": "/",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Paste text",
+      "short_name": "Paste text",
+      "description": "Open a Room to send a text snippet or link.",
+      "url": "/?compose=text",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }
