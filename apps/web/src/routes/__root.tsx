@@ -10,6 +10,8 @@ import { Button } from "~/shared/ui/button";
 import { Wordmark } from "~/shared/components/Wordmark";
 import { CenteredScreen } from "~/shared/components/CenteredScreen";
 import { ThemeToggle } from "~/shared/components/ThemeToggle";
+import { InstallButton } from "~/shared/components/InstallButton";
+import { IosInstallHint } from "~/shared/components/IosInstallHint";
 import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import type { RouterAppContext } from "~/shared/services/trpc";
 
@@ -84,6 +86,23 @@ function RootComponent() {
           }}
         >
           <ThemeToggle />
+        </div>
+        {/* Install affordances, both global and both self-hiding: the Chromium
+            button reveals itself only for returners holding a live prompt, the iOS
+            hint only on iOS-not-installed. Pinned to the bottom, clear of the send
+            flow, past the safe-area inset. */}
+        <div
+          className="pointer-events-none fixed right-0 bottom-0 left-0 z-[var(--z-sticky)] flex flex-col items-center gap-[var(--space-2)] p-[var(--space-3)] [&>*]:pointer-events-auto"
+          style={{
+            paddingBottom: "calc(var(--space-3) + env(safe-area-inset-bottom))",
+            paddingLeft: "calc(var(--space-3) + env(safe-area-inset-left))",
+            paddingRight: "calc(var(--space-3) + env(safe-area-inset-right))",
+          }}
+        >
+          <div className="w-full max-w-[var(--width-narrow)] empty:hidden">
+            <IosInstallHint />
+          </div>
+          <InstallButton />
         </div>
         <Scripts />
       </body>
