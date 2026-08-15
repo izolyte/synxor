@@ -70,6 +70,7 @@ function progress(transferId: string, receivedChunks: number): TransferProgressP
     receivedChunks,
     totalChunks: 2,
     complete: receivedChunks === 2,
+    author: null,
   };
 }
 

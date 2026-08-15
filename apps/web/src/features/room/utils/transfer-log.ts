@@ -43,12 +43,13 @@ function snippetPreview(content: string): string {
   return content.replace(/\s+/g, " ").trim();
 }
 
-// Files ride HTTP with no socket Participant, so a live file row carries no
-// identity — but only the Sender uploads, so a file is the Sender's, and it's
-// "yours" iff you are the Sender. History rows carry the Sender's resolved
-// identity from the server; this is the live fallback (bare role) until then.
-function fileAuthor(isSender: boolean): TransferAuthor | null {
-  return isSender ? null : { role: "SENDER" };
+// A file is "yours" when its author identity is this client's. The upload rides
+// HTTP with the same Room Token the socket joined with, so the server resolves it
+// to the same identity key — matching keys means you uploaded it. No self key yet
+// (identity not assigned) reads as not-yours, so a file never mis-attributes to
+// you before the server has told you who you are.
+function isOwnFile(author: TransferAuthor | null, selfKey: string | undefined): boolean {
+  return selfKey !== undefined && author?.identity?.key === selfKey;
 }
 
 function textRow(
@@ -77,12 +78,13 @@ function textRow(
 function historyRow(
   item: TransferHistory[number],
   ownIds: ReadonlySet<string>,
-  isSender: boolean,
+  selfKey: string | undefined,
   downloadHref?: DownloadHref,
 ): TransferLogRow | null {
   const receivedAt = Date.parse(item.createdAt);
   if (item.payloadType === "FILE") {
     const name = item.fileName ?? "File";
+    const mine = isOwnFile(item.author, selfKey);
     return {
       id: item.id,
       kind: "file",
@@ -90,10 +92,10 @@ function historyRow(
       status: item.delivered ? "delivered" : "in_progress",
       sizeBytes: item.fileSizeBytes ?? undefined,
       href: downloadHref?.(item.id, name),
-      // The server attributes a file to the Room Sender (identity and all); the
-      // Sender's own files stay uncaptioned.
-      author: isSender ? null : (item.author ?? { role: "SENDER" }),
-      mine: isSender,
+      // The server attributes a file to its uploading Participant (identity and
+      // all); this client's own files stay uncaptioned.
+      author: mine ? null : (item.author ?? null),
+      mine,
       receivedAt,
     };
   }
@@ -108,10 +110,11 @@ function historyRow(
 function liveFileRow(
   payload: TransferProgressPayload,
   delivered: ReadonlySet<string>,
-  isSender: boolean,
+  selfKey: string | undefined,
   receivedAt: number,
   downloadHref?: DownloadHref,
 ): TransferLogRow {
+  const mine = isOwnFile(payload.author, selfKey);
   return {
     id: payload.transferId,
     kind: "file",
@@ -119,8 +122,8 @@ function liveFileRow(
     status: delivered.has(payload.transferId) ? "delivered" : "in_progress",
     sizeBytes: payload.fileSizeBytes,
     href: downloadHref?.(payload.transferId, payload.fileName),
-    author: fileAuthor(isSender),
-    mine: isSender,
+    author: mine ? null : payload.author,
+    mine,
     receivedAt,
   };
 }
@@ -143,8 +146,10 @@ export interface MergeTransferLogInput {
   delivered: ReadonlySet<string>;
   /** transferIds this client sent, to attribute its own hydrated history rows. */
   ownIds: ReadonlySet<string>;
-  /** Whether this client is the Sender — the only Participant that uploads files. */
-  isSender: boolean;
+  /** This client's own identity key, to attribute the files it uploaded — a file
+   *  is "yours" when its author identity matches. Undefined until the server has
+   *  assigned this client an identity. */
+  selfKey: string | undefined;
   /** First-seen wall-clock time per live transferId; the socket carries none. */
   liveTimestamps: ReadonlyMap<string, number>;
   /** Latest identity per identity key, from rename broadcasts — re-labels every
@@ -180,7 +185,7 @@ export function mergeTransferLog({
   texts,
   delivered,
   ownIds,
-  isSender,
+  selfKey,
   liveTimestamps,
   identityOverrides,
   downloadHref,
@@ -188,7 +193,7 @@ export function mergeTransferLog({
   const rows = new Map<string, TransferLogRow>();
 
   for (const item of history) {
-    const row = historyRow(item, ownIds, isSender, downloadHref);
+    const row = historyRow(item, ownIds, selfKey, downloadHref);
     if (row) rows.set(item.id, row);
   }
 
@@ -212,7 +217,7 @@ export function mergeTransferLog({
 
   for (const payload of transfers) {
     const at = liveTimestamps.get(payload.transferId) ?? Date.now();
-    overlay(liveFileRow(payload, delivered, isSender, at, downloadHref));
+    overlay(liveFileRow(payload, delivered, selfKey, at, downloadHref));
   }
   for (const payload of texts) {
     const at = liveTimestamps.get(payload.transferId) ?? Date.now();

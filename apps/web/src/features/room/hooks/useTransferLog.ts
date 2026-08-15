@@ -38,8 +38,8 @@ export interface UseTransferLogRowsArgs {
   delivered: ReadonlySet<string>;
   /** transferIds this client sent, to attribute its own hydrated history rows. */
   ownIds: ReadonlySet<string>;
-  /** Whether this client is the Sender — the only Participant that uploads files. */
-  isSender: boolean;
+  /** This client's own identity key — attributes the files it uploaded. */
+  selfKey: string | undefined;
   /** Latest identity per key, from rename broadcasts — re-labels renamed peers. */
   identityOverrides?: ReadonlyMap<string, ParticipantIdentity>;
   /** Live session token; absent (SSR / expired) drops the download links. */
@@ -58,7 +58,7 @@ export function useTransferLogRows({
   texts,
   delivered,
   ownIds,
-  isSender,
+  selfKey,
   identityOverrides,
   token,
   apiOrigin,
@@ -86,11 +86,11 @@ export function useTransferLogRows({
         texts,
         delivered,
         ownIds,
-        isSender,
+        selfKey,
         liveTimestamps: seenRef.current,
         identityOverrides,
         downloadHref,
       }),
-    [history, transfers, texts, delivered, ownIds, isSender, identityOverrides, downloadHref],
+    [history, transfers, texts, delivered, ownIds, selfKey, identityOverrides, downloadHref],
   );
 }

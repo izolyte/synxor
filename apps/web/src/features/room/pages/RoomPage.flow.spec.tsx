@@ -73,13 +73,13 @@ suite("Room view", () => {
     await driver.find({ testId: "drop-zone" }).shouldBeVisible();
   });
 
-  test("a Receiver session gets the composer but not the Drop Zone", async () => {
+  test("a Receiver session gets the composer and the Drop Zone — files go both ways", async () => {
     roomSessionService.store("RCV123", { token: "tok-1", role: "receiver" });
     const driver = createVitestDriver();
     await driver.visit("/room/RCV123");
 
     await driver.find(selectors.transfer.compose).shouldBeVisible();
-    await driver.find({ testId: "drop-zone" }).shouldNotExist();
+    await driver.find({ testId: "drop-zone" }).shouldBeVisible();
   });
 
   test("without a held session, offers the Room-Code-required helper, not a 404", async () => {

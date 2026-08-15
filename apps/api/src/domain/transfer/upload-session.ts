@@ -1,6 +1,19 @@
+import type { ParticipantRole } from '../participant/participant.entity';
+import type { ParticipantIdentity } from '../participant/participant-identity';
+
 export const UPLOAD_SESSION_STORE = Symbol('UPLOAD_SESSION_STORE');
 
 export const MAX_CONCURRENT_TRANSFERS_PER_ROOM = 10;
+
+// The uploader, resolved once when the session opens and held for the life of the
+// upload so every progress broadcast attributes the file without a per-chunk
+// lookup. `participantId` is null when the token has no socket row to attribute
+// to; the identity is still derived from the token so the stream can label it.
+export interface UploadAuthor {
+  participantId: string | null;
+  role: ParticipantRole;
+  identity: ParticipantIdentity;
+}
 
 export interface UploadSession {
   transferId: string;
@@ -10,6 +23,7 @@ export interface UploadSession {
   mimeType: string;
   totalChunks: number;
   receivedChunks: ReadonlySet<number>;
+  author?: UploadAuthor;
 }
 
 export interface CreateUploadSessionInput {
@@ -19,6 +33,7 @@ export interface CreateUploadSessionInput {
   fileSizeBytes: number;
   mimeType: string;
   totalChunks: number;
+  author?: UploadAuthor;
 }
 
 // Tracks which chunks of an in-flight upload have landed. In-memory today;

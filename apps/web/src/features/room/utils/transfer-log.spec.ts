@@ -45,6 +45,7 @@ function progress(over: Partial<TransferProgressPayload> = {}): TransferProgress
     receivedChunks: 1,
     totalChunks: 4,
     complete: false,
+    author: null,
     ...over,
   };
 }
@@ -65,7 +66,7 @@ const noLive = {
   texts: [],
   delivered: new Set<string>(),
   ownIds: new Set<string>(),
-  isSender: false,
+  selfKey: undefined,
   liveTimestamps: new Map<string, number>(),
 };
 
@@ -166,12 +167,11 @@ suite("mergeTransferLog", () => {
     expect(row.mine).toBe(false);
   });
 
-  test("attributes a file history row to the Sender identity the server resolved", () => {
+  test("attributes a file history row to the author identity the server resolved", () => {
     const senderId: ParticipantIdentity = { key: "sx", colorKey: "gold", name: "Gold Finch" };
     const [row] = mergeTransferLog({
       history: [historyFile({ author: { role: "SENDER", identity: senderId } })],
       ...noLive,
-      isSender: false,
     });
     expect(row.author).toEqual({ role: "SENDER", identity: senderId });
   });
@@ -197,14 +197,43 @@ suite("mergeTransferLog", () => {
     expect(row.mine).toBe(true);
   });
 
-  test("a file is mine only when this client is the Sender", () => {
-    const asReceiver = mergeTransferLog({ history: [historyFile()], ...noLive, isSender: false });
-    expect(asReceiver[0].mine).toBe(false);
-    expect(asReceiver[0].author).toEqual({ role: "SENDER" });
+  test("a file is mine when its author identity is this client's, either direction", () => {
+    const meId: ParticipantIdentity = { key: "me", colorKey: "gold", name: "Gold Finch" };
+    const file = historyFile({ author: { role: "RECEIVER", identity: meId } });
 
-    const asSender = mergeTransferLog({ history: [historyFile()], ...noLive, isSender: true });
-    expect(asSender[0].mine).toBe(true);
-    expect(asSender[0].author).toBeNull();
+    // Same identity key as this client → mine, right-aligned, no author caption.
+    const asAuthor = mergeTransferLog({ history: [file], ...noLive, selfKey: "me" });
+    expect(asAuthor[0].mine).toBe(true);
+    expect(asAuthor[0].author).toBeNull();
+
+    // A peer's file (a Receiver's upload, seen by the Sender) stays captioned.
+    const asOther = mergeTransferLog({ history: [file], ...noLive, selfKey: "someone-else" });
+    expect(asOther[0].mine).toBe(false);
+    expect(asOther[0].author).toEqual({ role: "RECEIVER", identity: meId });
+  });
+
+  test("attributes a live file to its uploader — mine when the author identity matches", () => {
+    const meId: ParticipantIdentity = { key: "me", colorKey: "coral", name: "Coral Wren" };
+    const mine = mergeTransferLog({
+      ...noLive,
+      history: [],
+      selfKey: "me",
+      transfers: [progress({ transferId: "up", author: { role: "RECEIVER", identity: meId } })],
+      liveTimestamps: new Map([["up", 1]]),
+    });
+    expect(mine[0]).toMatchObject({ id: "up", kind: "file", mine: true });
+    expect(mine[0].author).toBeNull();
+
+    // The same broadcast reaches the peer, who sees it as an incoming, captioned file.
+    const theirs = mergeTransferLog({
+      ...noLive,
+      history: [],
+      selfKey: "sender-key",
+      transfers: [progress({ transferId: "up", author: { role: "RECEIVER", identity: meId } })],
+      liveTimestamps: new Map([["up", 1]]),
+    });
+    expect(theirs[0].mine).toBe(false);
+    expect(theirs[0].author).toEqual({ role: "RECEIVER", identity: meId });
   });
 
   test("a live text event and its persisted history row collapse to one", () => {

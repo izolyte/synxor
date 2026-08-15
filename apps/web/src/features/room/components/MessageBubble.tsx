@@ -1,10 +1,10 @@
-import { Check, Copy, Download, File as FileIcon } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import type { TransferAuthor } from "~/features/room/constants/transfer";
 import type { TransferLogRow } from "~/features/room/utils/transfer-log";
 import { hasIdentity, identityColorVar } from "~/features/room/constants/identity";
 import { LinkCard } from "~/features/room/components/LinkCard";
+import { FileCard } from "~/features/room/components/FileCard";
 import { ParticipantAvatar } from "~/features/room/components/ParticipantAvatar";
-import { formatFileSize } from "~/features/room/utils/format-file-size";
 import { formatTransferTime } from "~/features/room/utils/format-time";
 import { buttonVariants } from "~/shared/ui/button";
 import { cn } from "~/shared/utils/cn";
@@ -44,7 +44,7 @@ function AuthorCaption({ author }: { author: TransferAuthor | null }) {
  * One message in the Room stream. This client's own messages align right in a
  * solid bubble; everyone else's align left in a card, captioned with who sent it.
  * The three payloads read distinctly: a Text Snippet is plain wrapped text, a
- * Link is an open-in-new-tab card, a file is a download row. `onCopy` copies a
+ * Link is an open-in-new-tab card, a file is a download card. `onCopy` copies a
  * snippet in place. A delivered marker (a tick) rides the sender's own row.
  */
 export function MessageBubble({
@@ -65,10 +65,12 @@ export function MessageBubble({
     >
       {!row.mine && <AuthorCaption author={row.author} />}
 
-      {/* A Link gets its own preview card — its own bordered surface, so it sits
-          outside the text/file bubble rather than inside it. */}
+      {/* A Link and a file each get their own bordered card surface, so they sit
+          outside the text bubble rather than inside it. */}
       {row.kind === "link" ? (
         <LinkCard url={row.content ?? row.name} />
+      ) : row.kind === "file" ? (
+        <FileCard row={row} mine={row.mine} />
       ) : (
         <div
           className={cn(
@@ -119,30 +121,8 @@ function BubbleBody({
     mine && "border-white/40 bg-transparent text-[var(--color-ink-on-primary)] hover:bg-white/15",
   );
 
-  if (row.kind === "file") {
-    return (
-      <div className="flex items-center gap-2">
-        <FileIcon aria-hidden="true" size={20} className="shrink-0 opacity-80" />
-        <span dir="auto" title={row.name} className="min-w-0 flex-1 truncate">
-          {row.name}
-        </span>
-        {row.sizeBytes !== undefined && (
-          <span className="shrink-0 text-xs opacity-70">{formatFileSize(row.sizeBytes)}</span>
-        )}
-        {row.href ? (
-          <a href={row.href} download={row.name} aria-label={`Download ${row.name}`} className={action}>
-            <Download aria-hidden="true" size={16} />
-            Download
-          </a>
-        ) : (
-          <span className="shrink-0 text-xs opacity-70">Receiving…</span>
-        )}
-      </div>
-    );
-  }
-
-  // A Link never reaches here — MessageBubble renders it as a LinkCard, outside
-  // this shared bubble.
+  // A Link and a file never reach here — MessageBubble renders each as its own
+  // card, outside this shared text bubble.
   const text = row.content ?? row.name;
   return (
     <div className="flex items-end gap-2">

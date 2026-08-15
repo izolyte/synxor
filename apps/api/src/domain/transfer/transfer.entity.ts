@@ -5,8 +5,9 @@ export interface Transfer {
   roomId: string;
   payloadType: PayloadType;
   contentLength: bigint;
-  // The Participant who created it, or null for author-less rows (file uploads,
-  // legacy pre-two-way rows).
+  // The Participant who created it, or null when the author couldn't be resolved
+  // (a file uploaded by a token that never joined over the socket, legacy
+  // pre-two-way rows).
   authorParticipantId: string | null;
   createdAt: Date;
 }
@@ -27,6 +28,9 @@ export interface CreateTransferInput {
   roomId: string;
   payloadType: PayloadType;
   contentLength: bigint;
+  // The uploading Participant, for author attribution in the stream. Optional: the
+  // upload path resolves it from the Room Token, and null when no row matches.
+  authorParticipantId?: string | null;
 }
 
 export interface CreateFilePayloadInput {

@@ -21,7 +21,7 @@ export class FakeTransferRepository implements TransferRepository {
       roomId: input.roomId,
       payloadType: input.payloadType,
       contentLength: input.contentLength,
-      authorParticipantId: null,
+      authorParticipantId: input.authorParticipantId ?? null,
       createdAt: new Date(),
     };
     this.transfers.set(transfer.id, transfer);
