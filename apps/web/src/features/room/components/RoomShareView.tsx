@@ -14,7 +14,11 @@ import { DeliveryFlash } from "~/features/room/components/DeliveryFlash";
 import { ExpiryWarningNotice } from "~/features/room/components/ExpiryWarningNotice";
 import { DeleteRoomControl } from "~/features/room/components/DeleteRoomControl";
 import { useCountdown } from "~/features/room/hooks/useCountdown";
-import { useRoomSocket, type SocketFactory } from "~/features/room/hooks/useRoomSocket";
+import {
+  useRoomSocket,
+  type SocketFactory,
+  type RoomSocketStatus,
+} from "~/features/room/hooks/useRoomSocket";
 import { useComposingSignal } from "~/features/room/hooks/useComposingSignal";
 import { useOwnTransferIds } from "~/features/room/hooks/useOwnTransferIds";
 import type { Uploader } from "~/features/room/hooks/useFileUploads";
@@ -128,6 +132,14 @@ export function RoomShareView({
 
   const joinUrl = buildUrl("/join", { code: roomCode });
 
+  // While the Sender is alone, the Room becomes the share surface: the invite (big
+  // code, copy/share, QR) owns the body and the header drops its duplicate chrome.
+  // The moment a Participant joins — or on a Receiver's own session — it collapses
+  // into the live stream. A terminally lost socket isn't "waiting"; ConnectionAlert
+  // owns that, so fall through to the stream.
+  const present = receiverCount > 0;
+  const alone = isSender && !present && status !== "lost";
+
   return (
     <div className="min-h-dvh bg-background">
       <main className="mx-auto flex min-h-dvh w-full max-w-[var(--width-content)] flex-col px-4">
@@ -142,46 +154,57 @@ export function RoomShareView({
             {isSender && <DeleteRoomControl onClose={closeRoom} />}
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span
-              aria-label={`Room Code: ${roomCode.split("").join(" ")}`}
-              className="text-foreground select-all font-mono text-lg font-bold tracking-[var(--tracking-wide)]"
-            >
-              {roomCode}
-            </span>
-            <div className="flex gap-2">
-              <CopyButton
-                value={roomCode}
-                label="Copy code"
-                copiedLabel="Copied"
-                errorLabel="Couldn't copy — select the code above and copy it manually."
-              />
-              <CopyButton
-                value={joinUrl}
-                label="Copy link"
-                copiedLabel="Link copied"
-                errorLabel="Couldn't copy the link — select it manually:"
-                fallbackText={joinUrl}
-                variant="outline"
-              />
+          {/* Once someone's here (or on a Receiver's own session) the header carries
+              the code and copy actions; while alone they live in the share surface
+              below, so nothing's shown twice. */}
+          {!alone && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span
+                aria-label={`Room Code: ${roomCode.split("").join(" ")}`}
+                className="text-foreground select-all font-mono text-lg font-bold tracking-[var(--tracking-wide)]"
+              >
+                {roomCode}
+              </span>
+              <div className="flex gap-2">
+                <CopyButton
+                  value={roomCode}
+                  label="Copy code"
+                  copiedLabel="Copied"
+                  errorLabel="Couldn't copy — select the code above and copy it manually."
+                />
+                <CopyButton
+                  value={joinUrl}
+                  label="Copy link"
+                  copiedLabel="Link copied"
+                  errorLabel="Couldn't copy the link — select it manually:"
+                  fallbackText={joinUrl}
+                  variant="outline"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex flex-col gap-1">
             {countdown && <CountdownLine label={countdown.label} phase={countdown.phase} />}
             {status === "lost" ? (
               <ConnectionAlert />
             ) : (
-              <WaitingForReceiver status={status} receiverCount={receiverCount} />
+              !alone && <ReceiverPresence status={status} receiverCount={receiverCount} />
             )}
           </div>
         </header>
 
-        <RoomStream rows={rows} onCopy={clipboard.copy} />
+        {alone ? (
+          <WaitingForReceiver roomCode={roomCode} joinUrl={joinUrl} status={status} />
+        ) : (
+          <>
+            <RoomStream rows={rows} onCopy={clipboard.copy} />
 
-        {/* Ephemeral — sits at the foot of the stream, above the composer, and is
-            never part of the persisted feed. */}
-        <TypingIndicator identities={[...typing.values()]} />
+            {/* Ephemeral — sits at the foot of the stream, above the composer, and is
+                never part of the persisted feed. */}
+            <TypingIndicator identities={[...typing.values()]} />
+          </>
+        )}
 
         <footer className="flex shrink-0 flex-col gap-3 border-t border-[var(--border)] py-3">
           {isSender && (
@@ -199,6 +222,9 @@ export function RoomShareView({
           <TextPasteField
             onSend={handleSend}
             disabled={expired}
+            // Before anyone's here, the composer invites a first Transfer that'll
+            // be waiting for them on arrival (#99).
+            placeholder={alone ? "Start typing — they'll see it when they arrive…" : undefined}
             onComposing={composing.notify}
             onComposingStop={composing.stop}
           />
@@ -211,5 +237,37 @@ export function RoomShareView({
       {/* One-shot heads-up as the Room nears Expiry — fires once, then clears. */}
       <ExpiryWarningNotice phase={countdown?.phase} />
     </div>
+  );
+}
+
+// The header presence line once the Room is live — a dot plus words (never colour
+// alone), read as a polite live region so a Sender on a screen reader hears the
+// join/reconnect land. The alone-and-waiting cue is owned by the share surface, so
+// this only speaks up once someone's here or the socket blips. role="status" makes
+// presence flips arriving async over the socket announce instead of passing silently.
+const PRESENCE_ROW = "flex items-center justify-center gap-2 text-sm";
+function ReceiverPresence({
+  status,
+  receiverCount,
+}: {
+  status?: RoomSocketStatus;
+  receiverCount: number;
+}) {
+  if (status === "disconnected") {
+    return (
+      <p role="status" className={`${PRESENCE_ROW} text-muted-foreground`}>
+        <span aria-hidden="true" className="size-3 rounded-full bg-[var(--color-room-empty)]" />
+        Reconnecting…
+      </p>
+    );
+  }
+
+  if (receiverCount === 0) return null;
+
+  return (
+    <p role="status" className={`${PRESENCE_ROW} text-foreground`}>
+      <span aria-hidden="true" className="size-3 rounded-full bg-[var(--color-room-live)]" />
+      {receiverCount === 1 ? "Receiver connected" : `${receiverCount} Receivers connected`}
+    </p>
   );
 }

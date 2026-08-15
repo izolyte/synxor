@@ -49,7 +49,11 @@ export const copy = {
     copiedCode: "Copied",
     copyLink: "Copy link",
     copiedLink: "Link copied",
-    waiting: "Waiting for Receiver",
+    // The waiting room doubles as the share surface: an invite headline, the
+    // scannable QR, and the "still alone" cue the Sender sees until someone joins.
+    shareHeading: "Room's ready — bring someone in",
+    qr: "Room join QR code",
+    waiting: "Waiting for someone to join…",
     connected: "Receiver connected",
     createNew: "Start a new Room",
     // The no-session helper's way in: enter the code, prefilled from the link.
@@ -135,6 +139,11 @@ export const selectors = {
     copyLink: { role: "button", name: copy.room.copyLink } as const satisfies ActionableSelector,
     copiedCode: { text: copy.room.copiedCode } as const satisfies ReadonlySelector,
     copiedLink: { text: copy.room.copiedLink } as const satisfies ReadonlySelector,
+    shareHeading: {
+      role: "heading",
+      name: copy.room.shareHeading,
+    } as const satisfies ActionableSelector,
+    qr: { testId: "room-qr" } as const satisfies ActionableSelector,
     waiting: { text: copy.room.waiting } as const satisfies ReadonlySelector,
     connected: { text: copy.room.connected } as const satisfies ReadonlySelector,
     createNew: {

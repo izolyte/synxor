@@ -1,44 +1,53 @@
+import { expect, vi } from "vitest";
 import { renderComponent } from "~test/kit/component";
 import { suite, test } from "~test/kit";
+import { selectors } from "~test/app";
 import { WaitingForReceiver } from "~/features/room/components/WaitingForReceiver";
 
+const JOIN_URL = "http://localhost/join?code=ABC123";
+
 suite("WaitingForReceiver", () => {
-  test("shows the waiting label", async () => {
-    const screen = renderComponent(<WaitingForReceiver />);
+  test("is the share surface — invite, code, both actions, and a scannable QR", async () => {
+    const screen = renderComponent(<WaitingForReceiver roomCode="ABC123" joinUrl={JOIN_URL} />);
 
-    await screen.find({ text: "Waiting for Receiver" }).shouldBeVisible();
+    await screen.find(selectors.room.shareHeading).shouldBeVisible();
+    await screen.find(selectors.room.code("ABC123")).shouldBeVisible();
+    await screen.find(selectors.room.copyCode).shouldBeVisible();
+    await screen.find(selectors.room.copyLink).shouldBeVisible();
+    await screen.find(selectors.room.qr).shouldBeVisible();
+    await screen.find(selectors.room.waiting).shouldBeVisible();
   });
 
-  test("names a single connected Receiver", async () => {
-    const screen = renderComponent(<WaitingForReceiver receiverCount={1} />);
-
-    await screen.find({ text: "Receiver connected" }).shouldBeVisible();
-  });
-
-  test("pluralises the count for multiple Receivers", async () => {
-    const screen = renderComponent(<WaitingForReceiver receiverCount={3} />);
-
-    await screen.find({ text: "3 Receivers connected" }).shouldBeVisible();
-  });
-
-  test("reads as reconnecting when the socket drops, even with a held count", async () => {
-    const screen = renderComponent(<WaitingForReceiver status="disconnected" receiverCount={1} />);
+  test("softens the cue to reconnecting while the socket is down", async () => {
+    const screen = renderComponent(
+      <WaitingForReceiver roomCode="ABC123" joinUrl={JOIN_URL} status="disconnected" />,
+    );
 
     await screen.find({ text: "Reconnecting…" }).shouldBeVisible();
+    await screen.find(selectors.room.waiting).shouldNotExist();
   });
 
-  test("exposes presence as a polite live region", async () => {
-    const screen = renderComponent(<WaitingForReceiver receiverCount={1} />);
+  test("hands the join link to the platform share sheet when there is one", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", { value: share, configurable: true, writable: true });
 
-    await screen.find({ role: "status" }).shouldHaveText("Receiver connected");
+    try {
+      const screen = renderComponent(<WaitingForReceiver roomCode="ABC123" joinUrl={JOIN_URL} />);
+      await screen.find(selectors.room.copyLink).click();
+
+      expect(share).toHaveBeenCalledWith(expect.objectContaining({ url: JOIN_URL }));
+    } finally {
+      delete (navigator as { share?: unknown }).share;
+    }
   });
 
-  test("yields the presence slot when the connection is lost, avoiding a stale count", async () => {
-    // A terminally lost socket is owned by ConnectionAlert; echoing "2 Receivers
-    // connected" here would contradict it, so the line renders nothing.
-    const screen = renderComponent(<WaitingForReceiver status="lost" receiverCount={2} />);
+  test("falls back to copying the link where there is no share sheet", async () => {
+    // jsdom has no navigator.share, so the same action copies instead — userEvent
+    // backs the clipboard, so writeText resolves and the confirmation shows.
+    const screen = renderComponent(<WaitingForReceiver roomCode="ABC123" joinUrl={JOIN_URL} />);
 
-    await screen.find({ text: "2 Receivers connected" }).shouldNotExist();
-    await screen.find({ role: "status" }).shouldNotExist();
+    await screen.find(selectors.room.copyLink).click();
+
+    await screen.find(selectors.room.copiedLink).shouldBeVisible();
   });
 });

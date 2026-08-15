@@ -162,6 +162,63 @@ suite("RoomShareView", () => {
     expect(socket.sent).toContain(TransferEvent.SendText);
   });
 
+  test("collapses the share surface into the live stream when a Participant joins", async () => {
+    const socket = new FakeSocket();
+    const factory = () => socket as unknown as Socket;
+    const screen = renderComponent(
+      <>
+        <button onClick={() => socket.emit("connect")}>connect</button>
+        <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: 1 })}>join</button>
+        <RoomShareView
+          roomCode="ABC123"
+          expiresAt={undefined}
+          token="tok"
+          role="sender"
+          socketFactory={factory}
+        />
+      </>,
+    );
+
+    // Alone: the Room is the share surface, waiting cue and all.
+    await screen.find({ role: "button", name: "connect" }).click();
+    await screen.find(selectors.room.waiting).shouldBeVisible();
+
+    // A Participant arrives — the surface gives way to the live stream and the
+    // header reads the presence instead of the waiting cue.
+    await screen.find({ role: "button", name: "join" }).click();
+    await screen.find(selectors.room.waiting).shouldNotExist();
+    await screen.find(selectors.room.connected).shouldBeVisible();
+  });
+
+  test("takes a first message while alone; it lands in the stream once someone joins", async () => {
+    const socket = new FakeSocket();
+    const factory = () => socket as unknown as Socket;
+    const screen = renderComponent(
+      <>
+        <button onClick={() => socket.emit("connect")}>connect</button>
+        <button onClick={() => socket.emit(RoomEvent.Joined, { receiverCount: 1 })}>join</button>
+        <RoomShareView
+          roomCode="ABC123"
+          expiresAt={undefined}
+          token="tok"
+          role="sender"
+          socketFactory={factory}
+        />
+      </>,
+    );
+
+    await screen.find({ role: "button", name: "connect" }).click();
+    await screen.find(selectors.room.waiting).shouldBeVisible();
+
+    // The composer stays live on the share surface, so a Sender can queue the first
+    // Transfer before anyone's here (#99 persists + delivers it on join).
+    await screen.find(selectors.transfer.compose).type("first, before you arrive{Enter}");
+    expect(socket.sent).toContain(TransferEvent.SendText);
+
+    await screen.find({ role: "button", name: "join" }).click();
+    await screen.find({ text: "first, before you arrive" }).shouldBeVisible();
+  });
+
   test("holds an expired Room open until the in-flight Transfer lands, then seals", async () => {
     const socket = new FakeSocket();
 

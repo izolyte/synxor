@@ -17,11 +17,14 @@ import { MAX_TEXT_PAYLOAD_CHARS } from "~/features/room/constants/transfer";
 export function TextPasteField({
   onSend,
   disabled = false,
+  placeholder = "Type a message, paste text, or a link",
   onComposing,
   onComposingStop,
 }: {
   onSend: (text: string) => void;
   disabled?: boolean;
+  /** Prompt text; the waiting room swaps in an invite-flavoured line. */
+  placeholder?: string;
   /** Called on each edit, to drive the ephemeral typing signal. */
   onComposing?: () => void;
   /** Called on send, to retract the typing signal at once. */
@@ -66,7 +69,7 @@ export function TextPasteField({
         }}
         rows={2}
         disabled={disabled}
-        placeholder="Type a message, paste text, or a link"
+        placeholder={placeholder}
         aria-label="Text or link to send"
         aria-invalid={tooLong || undefined}
         aria-describedby={tooLong ? errorId : undefined}
