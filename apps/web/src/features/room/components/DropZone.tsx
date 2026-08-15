@@ -38,6 +38,7 @@ export function DropZone({
   uploader,
   delivered,
   onActiveChange,
+  registerPicker,
 }: {
   token?: string;
   apiOrigin?: string;
@@ -50,6 +51,9 @@ export function DropZone({
    *  this because an own upload isn't in the socket `transfers` feed until the
    *  server echoes its first progress broadcast. */
   onActiveChange?: (active: boolean) => void;
+  /** Hands the file picker up so the composer's attach button can open it — the
+   *  bar owns the visible affordance, this zone stays the drop target + queue. */
+  registerPicker?: (open: () => void) => void;
 }) {
   const { files, notice, addFiles, rejectFolder, removeFile, reorderFiles } = useFileQueue();
   const uploads = useFileUploads(files, token, apiOrigin, uploader);
@@ -70,6 +74,11 @@ export function DropZone({
   });
 
   const openPicker = useCallback(() => inputRef.current?.click(), []);
+
+  // Lift the picker so the composer's paperclip can trigger the same queue.
+  useEffect(() => {
+    registerPicker?.(openPicker);
+  }, [registerPicker, openPicker]);
 
   const handlePick = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -111,20 +120,19 @@ export function DropZone({
         onKeyDown={handleKeyDown}
         {...handlers}
         className={cn(
-          "focus-ring flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)]",
-          "border border-dashed border-[var(--color-border)] text-center shadow-[var(--shadow-sm)]",
+          "focus-ring flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-lg)]",
+          "border border-dashed border-[var(--color-border)] px-3 py-2 text-center",
           "transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out)]",
-          "min-h-[var(--dropzone-height-mobile)] sm:min-h-[var(--dropzone-height-tablet)] lg:min-h-[var(--dropzone-height-desktop)]",
           dragActive &&
             "border-2 border-solid border-[var(--color-primary)] bg-[var(--color-primary-subtle)]",
         )}
       >
-        <Upload aria-hidden="true" size={28} className="text-muted-foreground" />
+        <Upload aria-hidden="true" size={16} className="shrink-0 text-muted-foreground" />
         {/* Pure CSS per docs/design/09-focus-keyboard.md — no JS pointer detection.
             The accessible name comes from whichever span the media query leaves
             visible; a display:none span is excluded from it by spec, so there's
             no separate aria-label to keep in sync. */}
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-xs">
           <span className="pointer-coarse:hidden">Drop files here or click to browse</span>
           <span className="hidden pointer-coarse:inline">Tap to browse</span>
         </p>

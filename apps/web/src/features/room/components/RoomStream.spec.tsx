@@ -37,4 +37,11 @@ suite("RoomStream", () => {
     await screen.find({ text: "first" }).shouldBeVisible();
     await screen.find({ text: "second" }).shouldBeVisible();
   });
+
+  test("heads a day's messages with a divider", async () => {
+    const screen = renderComponent(
+      <RoomStream rows={[row({ id: "a", name: "hi", content: "hi", receivedAt: Date.now() })]} />,
+    );
+    await screen.find({ text: "Today" }).shouldBeVisible();
+  });
 });

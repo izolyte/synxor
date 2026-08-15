@@ -81,25 +81,27 @@
     --primitive-black:    oklch(0.040 0.000 0);
 
     /* ── shadcn/ui contract ── */
+    /* Values track the redesign artifact's oklch tokens (screen 04): a slightly
+       deeper ink and the tuned teal primary, with matching surfaces. */
     --background: oklch(1 0 0);
-    --foreground: oklch(0.12 0.012 200);
+    --foreground: oklch(0.16 0.012 200);
     --card: oklch(0.99 0.004 200);
-    --card-foreground: oklch(0.12 0.012 200);
+    --card-foreground: oklch(0.16 0.012 200);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.12 0.012 200);
-    --primary: oklch(0.62 0.100 200);
+    --popover-foreground: oklch(0.16 0.012 200);
+    --primary: oklch(0.60 0.108 200);
     --primary-foreground: oklch(1 0 0);
     --secondary: oklch(0.94 0.01 200);
     --secondary-foreground: oklch(0.2 0.015 200);
     --muted: oklch(0.96 0.005 200);
-    --muted-foreground: oklch(0.52 0.015 200);
+    --muted-foreground: oklch(0.48 0.015 200);
     --accent: oklch(0.94 0.01 200);
     --accent-foreground: oklch(0.2 0.015 200);
     --destructive: oklch(0.53 0.18 20);
     --destructive-foreground: oklch(1 0 0);
     --border: oklch(0.88 0.012 200);
     --input: oklch(0.88 0.012 200);
-    --ring: oklch(0.62 0.100 200);
+    --ring: oklch(0.60 0.108 200);
     --radius: 0.5rem;
 
     /* ── Synxor aliases (shadcn bridge) ── */
@@ -116,21 +118,21 @@
     --color-bg-subtle: oklch(0.975 0.008 200);
     --color-surface-raised: oklch(0.955 0.008 200);
     --color-overlay: oklch(0.08 0 0 / 0.45);
-    --color-ink-subtle: oklch(0.66 0.008 200);
+    --color-ink-subtle: oklch(0.60 0.010 200);
     --color-ink-on-primary: oklch(1 0 0);
     --color-ink-on-accent: oklch(1 0 0);
     --color-ink-on-error: oklch(1 0 0);
     --color-ink-on-warning: oklch(0.15 0 0);
     --color-ink-inverted: oklch(0.975 0.008 200);
-    --color-primary-hover: oklch(0.56 0.110 200);
+    --color-primary-hover: oklch(0.54 0.115 200);
     --color-primary-active: oklch(0.50 0.115 200);
-    --color-primary-subtle: oklch(0.95 0.015 200);
+    --color-primary-subtle: oklch(0.95 0.016 200);
     --color-primary-muted: oklch(0.82 0.06 200);
     --color-accent: oklch(0.78 0.14 165);
     --color-accent-hover: oklch(0.7 0.14 165);
     --color-accent-subtle: oklch(0.94 0.04 165);
-    --color-border-strong: oklch(0.78 0.012 200);
-    --color-border-focus: oklch(0.62 0.100 200);
+    --color-border-strong: oklch(0.80 0.012 200);
+    --color-border-focus: oklch(0.60 0.108 200);
     --color-success: oklch(0.62 0.14 165);
     --color-success-subtle: oklch(0.94 0.04 165);
     --color-success-border: oklch(0.72 0.1 165);
@@ -259,10 +261,6 @@
 
     --header-height: 3.5rem;
 
-    --dropzone-height-mobile:  calc(100dvh - var(--header-height));
-    --dropzone-height-tablet:  17.5rem;
-    --dropzone-height-desktop: 22.5rem;
-
     --bp-sm:  480px;
     --bp-md:  768px;
     --bp-lg:  1024px;
@@ -289,42 +287,44 @@
 
   /* ── Dark mode ── */
   .dark {
-    /* shadcn/ui dark contract */
-    --background: oklch(0.1 0 0);
-    --foreground: oklch(0.94 0.005 200);
-    --card: oklch(0.14 0.008 200);
-    --card-foreground: oklch(0.94 0.005 200);
-    --popover: oklch(0.14 0.008 200);
-    --popover-foreground: oklch(0.94 0.005 200);
-    --primary: oklch(0.68 0.1 200);
-    --primary-foreground: oklch(0.08 0 0);
-    --secondary: oklch(0.18 0.01 200);
+    /* shadcn/ui dark contract — tracks the redesign artifact (screen 04): the base
+       lifts off pure black to a faint cool charcoal, surfaces step up from it, and
+       borders read as translucent white so the glass chrome sits over any fill. */
+    --background: oklch(0.14 0.007 220);
+    --foreground: oklch(0.95 0.005 200);
+    --card: oklch(0.18 0.009 200);
+    --card-foreground: oklch(0.95 0.005 200);
+    --popover: oklch(0.18 0.009 200);
+    --popover-foreground: oklch(0.95 0.005 200);
+    --primary: oklch(0.74 0.1 200);
+    --primary-foreground: oklch(0.12 0.01 220);
+    --secondary: oklch(0.22 0.011 200);
     --secondary-foreground: oklch(0.86 0.01 200);
-    --muted: oklch(0.18 0.01 200);
-    --muted-foreground: oklch(0.62 0.015 200);
-    --accent: oklch(0.18 0.01 200);
+    --muted: oklch(0.22 0.011 200);
+    --muted-foreground: oklch(0.66 0.015 200);
+    --accent: oklch(0.22 0.011 200);
     --accent-foreground: oklch(0.86 0.01 200);
     --destructive: oklch(0.58 0.18 20);
-    --destructive-foreground: oklch(0.08 0 0);
-    --border: oklch(0.24 0.012 200);
-    --input: oklch(0.24 0.012 200);
-    --ring: oklch(0.68 0.1 200);
+    --destructive-foreground: oklch(0.12 0.01 220);
+    --border: oklch(1 0 0 / 0.10);
+    --input: oklch(1 0 0 / 0.10);
+    --ring: oklch(0.74 0.1 200);
 
     /* Synxor-exclusive dark overrides */
-    --color-bg-subtle: oklch(0.13 0.008 200);
-    --color-surface-raised: oklch(0.2 0.01 200);
+    --color-bg-subtle: oklch(0.165 0.008 200);
+    --color-surface-raised: oklch(0.22 0.011 200);
     --color-overlay: oklch(0.04 0 0 / 0.65);
-    --color-ink-subtle: oklch(0.42 0.008 200);
+    --color-ink-subtle: oklch(0.52 0.010 200);
     --color-ink-inverted: oklch(0.15 0.012 200);
-    --color-primary-hover: oklch(0.74 0.095 200);
+    --color-primary-hover: oklch(0.80 0.095 200);
     --color-primary-active: oklch(0.78 0.09 200);
-    --color-primary-subtle: oklch(0.18 0.02 200);
+    --color-primary-subtle: oklch(0.25 0.038 200);
     --color-primary-muted: oklch(0.38 0.05 200);
     --color-accent: oklch(0.72 0.14 165);
     --color-accent-hover: oklch(0.78 0.13 165);
     --color-accent-subtle: oklch(0.18 0.04 165);
-    --color-border-strong: oklch(0.34 0.014 200);
-    --color-border-focus: oklch(0.68 0.1 200);
+    --color-border-strong: oklch(1 0 0 / 0.18);
+    --color-border-focus: oklch(0.74 0.1 200);
     --color-success: oklch(0.72 0.14 165);
     --color-success-subtle: oklch(0.18 0.04 165);
     --color-success-border: oklch(0.42 0.1 165);
@@ -449,12 +449,12 @@
   }
 
   ::selection {
-    background-color: oklch(0.62 0.100 200 / 0.25);
+    background-color: oklch(0.60 0.108 200 / 0.25);
     color: var(--foreground);
   }
 
   .dark ::selection {
-    background-color: oklch(0.68 0.1 200 / 0.35);
+    background-color: oklch(0.74 0.1 200 / 0.35);
   }
 
   /* Keyboard focus ring for elements that aren't a native control with its own

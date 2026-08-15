@@ -86,7 +86,7 @@ export function MessageBubble({
 
       <span
         className={cn(
-          "flex items-center gap-1 px-1 text-xs text-[var(--color-ink-muted)]",
+          "flex items-center gap-1.5 px-1 font-mono text-[0.625rem] tabular-nums text-[var(--color-ink-subtle)]",
           row.mine ? "flex-row-reverse" : "",
         )}
       >
