@@ -22,6 +22,8 @@ function args(over: Partial<UseTransferLogRowsArgs> = {}): UseTransferLogRowsArg
     transfers: [],
     texts: [],
     delivered: new Set<string>(),
+    ownIds: new Set<string>(),
+    isSender: false,
     token: undefined,
     apiOrigin: undefined,
     ...over,

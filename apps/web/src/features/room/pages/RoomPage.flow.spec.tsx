@@ -71,14 +71,12 @@ suite("Room view", () => {
     await driver.find({ testId: "drop-zone" }).shouldBeVisible();
   });
 
-  test("a Receiver session gets the incoming feed instead of the Drop Zone", async () => {
+  test("a Receiver session gets the composer but not the Drop Zone", async () => {
     roomSessionService.store("RCV123", { token: "tok-1", role: "receiver" });
     const driver = createVitestDriver();
     await driver.visit("/room/RCV123");
 
-    await driver
-      .find({ text: "Files, text, and links the Sender shares will appear here." })
-      .shouldBeVisible();
+    await driver.find(selectors.transfer.compose).shouldBeVisible();
     await driver.find({ testId: "drop-zone" }).shouldNotExist();
   });
 

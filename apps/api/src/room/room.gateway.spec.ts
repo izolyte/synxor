@@ -353,11 +353,13 @@ describe('RoomGateway', () => {
       transferId: string;
       payloadType: string;
       content: string;
+      author: { role: string };
     };
     expect(payload).toEqual({
       transferId: ack.transferId,
       payloadType: 'LINK',
       content: 'https://example.com/x',
+      author: { role: 'SENDER' },
     });
   });
 
@@ -391,12 +393,19 @@ describe('RoomGateway', () => {
     const ack = (await sendText(sender, 'https://example.com/x')) as { transferId: string };
 
     const transfer = await fakeTransfers.findById(ack.transferId);
-    expect(transfer).toMatchObject({ roomId: 'room-1', payloadType: 'LINK' });
+    const [senderParticipant] = await fakeParticipants.findByRoomId('room-1');
+    expect(transfer).toMatchObject({
+      roomId: 'room-1',
+      payloadType: 'LINK',
+      authorParticipantId: senderParticipant.id,
+    });
     const [text] = await fakeTransfers.findTextPayloadsByTransferIds([ack.transferId]);
     expect(text).toMatchObject({ transferId: ack.transferId, content: 'https://example.com/x' });
   });
 
-  it('does not persist or broadcast when a Receiver tries to send text', async () => {
+  // The keystone of #99: a Receiver — not only the creator — can create a Text
+  // Snippet, and it's attributed to them and delivered to the other Participant.
+  it('lets a Receiver send a Text Snippet, attributes it, and delivers it to the Sender', async () => {
     fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
     fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
 
@@ -405,9 +414,27 @@ describe('RoomGateway', () => {
     const receiver = open('receiver-tok');
     await waitFor(sender, 'room:joined');
 
-    await sendText(receiver, 'https://example.com');
+    const received = waitFor(sender, 'transfer:text');
+    const ack = (await sendText(receiver, 'ping from the Receiver')) as { transferId: string };
 
-    expect(await fakeTransfers.findByRoomId('room-1')).toHaveLength(0);
+    const payload = (await received) as {
+      transferId: string;
+      payloadType: string;
+      content: string;
+      author: { role: string };
+    };
+    expect(payload).toEqual({
+      transferId: ack.transferId,
+      payloadType: 'TEXT_SNIPPET',
+      content: 'ping from the Receiver',
+      author: { role: 'RECEIVER' },
+    });
+
+    const transfer = await fakeTransfers.findById(ack.transferId);
+    const receiverParticipant = (await fakeParticipants.findByRoomId('room-1')).find(
+      (p) => p.role === 'RECEIVER',
+    );
+    expect(transfer?.authorParticipantId).toBe(receiverParticipant?.id);
   });
 
   it('returns an error and persists nothing when the write fails', async () => {
@@ -450,23 +477,6 @@ describe('RoomGateway', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     await expect(Promise.race([echoed, Promise.resolve('none')])).resolves.toBe('none');
-  });
-
-  it('rejects a Receiver trying to send text and broadcasts nothing', async () => {
-    fakeVerifier.register('sender-tok', { roomId: 'room-1', role: TokenRole.Sender });
-    fakeVerifier.register('receiver-tok', { roomId: 'room-1', role: TokenRole.Receiver });
-
-    const sender = open('sender-tok');
-    await waitFor(sender, 'connect');
-    const receiver = open('receiver-tok');
-    await waitFor(sender, 'room:joined');
-
-    const senderGot = waitFor(sender, 'transfer:text');
-    const ack = (await sendText(receiver, 'https://example.com')) as { error: string };
-
-    expect(ack.error).toBe('Only the Sender may send text');
-    await new Promise((r) => setTimeout(r, 50));
-    await expect(Promise.race([senderGot, Promise.resolve('none')])).resolves.toBe('none');
   });
 
   it('rejects text over the character limit', async () => {

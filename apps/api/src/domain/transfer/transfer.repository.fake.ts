@@ -21,6 +21,7 @@ export class FakeTransferRepository implements TransferRepository {
       roomId: input.roomId,
       payloadType: input.payloadType,
       contentLength: input.contentLength,
+      authorParticipantId: null,
       createdAt: new Date(),
     };
     this.transfers.set(transfer.id, transfer);
@@ -62,6 +63,7 @@ export class FakeTransferRepository implements TransferRepository {
       roomId: input.roomId,
       payloadType: input.payloadType,
       contentLength: input.contentLength,
+      authorParticipantId: input.authorParticipantId,
       createdAt: new Date(),
     };
     this.transfers.set(transfer.id, transfer);

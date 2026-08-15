@@ -21,6 +21,12 @@ export class PrismaParticipantRepository implements ParticipantRepository {
     return participants.map((p) => this.toEntity(p));
   }
 
+  async findByIds(ids: string[]): Promise<Participant[]> {
+    if (ids.length === 0) return [];
+    const participants = await this.prisma.participant.findMany({ where: { id: { in: ids } } });
+    return participants.map((p) => this.toEntity(p));
+  }
+
   async setDisconnected(id: string, at: Date): Promise<Participant> {
     await this.prisma.participant.updateMany({
       where: { id, disconnectedAt: null },

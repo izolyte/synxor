@@ -8,22 +8,8 @@ export const STALL_SLOW_MS = 10_000;
 export const STALL_ALMOST_MS = 30_000;
 export const ALMOST_DONE_PERCENT = 99;
 
-// Transfer Log switches to windowed rendering past this many rows
-// (docs/design/15-edge-cases.md). Below it, every row is in the DOM so roving
-// focus and find-in-page just work.
-export const TRANSFER_LOG_VIRTUALIZE_THRESHOLD = 100;
-
-// Estimated Transfer Row height for the virtualizer (docs/design/10-components.md
-// sizes Log rows at ~48px). Rows are near-fixed height, so a flat estimate keeps
-// scroll math simple without per-row measurement.
-export const TRANSFER_LOG_ROW_HEIGHT = 48;
-
-// Height the Log scroll area caps at before it scrolls, in px. Doubles as the
-// virtualizer's seed viewport so the first paint fills a window.
-export const TRANSFER_LOG_MAX_HEIGHT = 352;
-
-// Mirrors the API's MAX_TEXT_PAYLOAD_CHARS — the Sender's input is capped here so
-// an over-limit paste is rejected inline before it ever reaches the socket.
+// Mirrors the API's MAX_TEXT_PAYLOAD_CHARS — the composer's input is capped here
+// so an over-limit paste is rejected inline before it ever reaches the socket.
 export const MAX_TEXT_PAYLOAD_CHARS = 100_000;
 
 export const TransferEvent = {
@@ -53,8 +39,24 @@ export interface TransferDeliveredPayload {
 
 export type TextPayloadType = "TEXT_SNIPPET" | "LINK";
 
+// Who sent a Transfer. Role only for now — enough to attribute a message in the
+// stream; #102 layers a stable per-author identity (colour + name) on top.
+export type TransferAuthorRole = "SENDER" | "RECEIVER";
+
+export interface TransferAuthor {
+  role: TransferAuthorRole;
+}
+
 export interface TransferTextPayload {
   transferId: string;
   payloadType: TextPayloadType;
   content: string;
+  author: TransferAuthor;
 }
+
+// Ack the server returns to the author of a Text Snippet / Link: the persisted id
+// plus the server's classification, so the sender renders the same row its peers
+// receive (its own send is never broadcast back). Or a reason on failure.
+export type SendTextAck =
+  | { transferId: string; payloadType: TextPayloadType; content: string }
+  | { error: string };

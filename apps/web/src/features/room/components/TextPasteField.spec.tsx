@@ -17,6 +17,30 @@ suite("TextPasteField", () => {
     expect(rtlScreen.getByRole("textbox", { name: "Text or link to send" })).toHaveValue("");
   });
 
+  test("Enter sends and clears the field", async () => {
+    const onSend = vi.fn();
+    const screen = renderComponent(<TextPasteField onSend={onSend} />);
+
+    const field = screen.find({ role: "textbox", name: "Text or link to send" });
+    await field.type("ship it{Enter}");
+
+    expect(onSend).toHaveBeenCalledWith("ship it");
+    expect(rtlScreen.getByRole("textbox", { name: "Text or link to send" })).toHaveValue("");
+  });
+
+  test("Shift+Enter inserts a newline instead of sending", async () => {
+    const onSend = vi.fn();
+    const screen = renderComponent(<TextPasteField onSend={onSend} />);
+
+    const field = screen.find({ role: "textbox", name: "Text or link to send" });
+    await field.type("line one{Shift>}{Enter}{/Shift}line two");
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect(rtlScreen.getByRole("textbox", { name: "Text or link to send" })).toHaveValue(
+      "line one\nline two",
+    );
+  });
+
   test("disables Send while the field is empty or blank", () => {
     renderComponent(<TextPasteField onSend={vi.fn()} />);
     expect(rtlScreen.getByRole("button", { name: "Send" })).toBeDisabled();
