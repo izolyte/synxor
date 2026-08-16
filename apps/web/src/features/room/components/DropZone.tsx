@@ -39,11 +39,14 @@ export function DropZone({
   delivered,
   onActiveChange,
   registerPicker,
+  initialFiles,
 }: {
   token?: string;
   apiOrigin?: string;
   /** Test seam; production uses the real chunked uploader. */
   uploader?: Uploader;
+  /** Files to queue on mount — a PWA share drops its files straight in. */
+  initialFiles?: File[];
   /** transferIds a Receiver has finished downloading — flips a Sent row to
    *  Delivered. Absent (no live socket, tests) leaves rows at Sent. */
   delivered?: ReadonlySet<string>;
@@ -79,6 +82,14 @@ export function DropZone({
   useEffect(() => {
     registerPicker?.(openPicker);
   }, [registerPicker, openPicker]);
+
+  // A PWA share hands its files in as props — queue them once, on mount.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current || !initialFiles?.length) return;
+    seeded.current = true;
+    addFiles(initialFiles);
+  }, [initialFiles, addFiles]);
 
   const handlePick = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {

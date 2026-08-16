@@ -10,6 +10,7 @@ import { Button } from "~/shared/ui/button";
 import { Wordmark } from "~/shared/components/Wordmark";
 import { CenteredScreen } from "~/shared/components/CenteredScreen";
 import { ThemeToggle } from "~/shared/components/ThemeToggle";
+import { ServiceWorkerRegistrar } from "~/shared/components/ServiceWorkerRegistrar";
 import { InstallButton } from "~/shared/components/InstallButton";
 import { IosInstallHint } from "~/shared/components/IosInstallHint";
 import { resolveApiOrigin } from "~/shared/utils/api-origin";
@@ -75,6 +76,7 @@ function RootComponent() {
       </head>
       <body>
         <Outlet />
+        <ServiceWorkerRegistrar />
         {/* Global control, so it lives outside the route Outlet. Fixed to the
             top-right corner past the safe-area inset; placed after the Outlet so
             it falls last in the tab order per docs/design/09-focus-keyboard.md. */}

@@ -27,6 +27,7 @@ import type { Uploader } from "~/features/room/hooks/useFileUploads";
 import { useTransferLogRows } from "~/features/room/hooks/useTransferLog";
 import { useClipboard } from "~/features/room/hooks/useClipboard";
 import type { RoomRole } from "~/features/room/services/room-session.service";
+import { sharedIntake, type SharedPayload } from "~/features/room/services/shared-intake.service";
 import type { TransferHistory } from "~/features/room/utils/transfer-log";
 import { resolveApiOrigin } from "~/shared/utils/api-origin";
 import { buildUrl } from "~/shared/utils/url";
@@ -107,6 +108,17 @@ export function RoomShareView({
 
   const own = useOwnTransferIds(roomCode);
   const clipboard = useClipboard();
+
+  // A share into the PWA opened this Room (see routes/share.tsx). Drain the handoff
+  // once on mount so the composer opens pre-filled with the shared text and its
+  // files land queued for send.
+  const [shared, setShared] = useState<SharedPayload | null>(null);
+  const drainedShare = useRef(false);
+  useEffect(() => {
+    if (drainedShare.current) return;
+    drainedShare.current = true;
+    setShared(sharedIntake.take());
+  }, []);
 
   // Bridge the Drop Zone's file picker to the composer's paperclip: the Drop Zone
   // owns the queue + input and hands its open function up, the bar triggers it.
@@ -224,6 +236,7 @@ export function RoomShareView({
               uploader={uploader}
               onActiveChange={setUploading}
               registerPicker={registerPicker}
+              initialFiles={shared?.files}
             />
             {/* Past the Expiry the Room is held open only to land an in-flight
                 Transfer — seal the composer so nothing new goes into a dead Room. */}
@@ -231,6 +244,7 @@ export function RoomShareView({
               onSend={handleSend}
               onAttach={openPicker}
               disabled={expired}
+              initialText={shared?.text}
               // Before anyone's here, the composer invites a first Transfer that'll
               // be waiting for them on arrival (#99).
               placeholder={alone ? "Start typing — they'll see it when they arrive…" : undefined}
