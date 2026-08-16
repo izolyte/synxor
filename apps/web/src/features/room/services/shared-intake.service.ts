@@ -19,6 +19,9 @@ const metaKey = (id: string) => `/__share__/${id}/meta`;
 const fileKey = (id: string, index: number) => `/__share__/${id}/file/${index}`;
 
 interface ShareMeta {
+  // Epoch ms the service worker stashed this share; it uses the value to expire
+  // orphaned stashes (public/sw.js). The client drain ignores it.
+  createdAt?: number;
   title?: string;
   text?: string;
   url?: string;

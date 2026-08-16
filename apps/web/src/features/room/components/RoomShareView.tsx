@@ -110,15 +110,10 @@ export function RoomShareView({
   const clipboard = useClipboard();
 
   // A share into the PWA opened this Room (see routes/share.tsx). Drain the handoff
-  // once on mount so the composer opens pre-filled with the shared text and its
-  // files land queued for send.
-  const [shared, setShared] = useState<SharedPayload | null>(null);
-  const drainedShare = useRef(false);
-  useEffect(() => {
-    if (drainedShare.current) return;
-    drainedShare.current = true;
-    setShared(sharedIntake.take());
-  }, []);
+  // during the first render — not a post-mount effect — so the composer mounts with
+  // the shared text already seeded (TextPasteField seeds its state once, on mount)
+  // and the files queue on the same commit.
+  const [shared] = useState<SharedPayload | null>(() => sharedIntake.take());
 
   // Bridge the Drop Zone's file picker to the composer's paperclip: the Drop Zone
   // owns the queue + input and hands its open function up, the bar triggers it.

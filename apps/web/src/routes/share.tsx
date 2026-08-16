@@ -5,7 +5,11 @@ import { CenteredScreen } from "~/shared/components/CenteredScreen";
 import { ScreenColumn } from "~/shared/components/ScreenColumn";
 import { ScreenHeader } from "~/shared/components/ScreenHeader";
 import { roomSessionService } from "~/features/room/services/room-session.service";
-import { drainSharedCache, sharedIntake } from "~/features/room/services/shared-intake.service";
+import {
+  drainSharedCache,
+  sharedIntake,
+  type SharedPayload,
+} from "~/features/room/services/shared-intake.service";
 import { DEFAULT_EXPIRY } from "~/features/room/constants/expiry";
 
 export const Route = createFileRoute("/share")({
@@ -29,14 +33,23 @@ function SharePage() {
   const navigate = useNavigate();
   const [failed, setFailed] = useState(false);
   const started = useRef(false);
+  // Held here, not published to sharedIntake, until the Room actually exists — a
+  // failed create must not leave the payload waiting for the next Room this tab
+  // opens to swallow it.
+  const payloadRef = useRef<SharedPayload | null>(null);
 
   const create = useMutation(
     trpc.room.create.mutationOptions({
       onSuccess: ({ roomCode, roomToken, expiresAt }) => {
         roomSessionService.storeNewSender(roomCode, roomToken, expiresAt);
+        // Publish only now, right before the Room mounts and drains it.
+        if (payloadRef.current) sharedIntake.set(payloadRef.current);
         navigate({ to: "/room/$roomCode", params: { roomCode }, replace: true });
       },
-      onError: () => setFailed(true),
+      onError: () => {
+        payloadRef.current = null;
+        setFailed(true);
+      },
     }),
   );
 
@@ -52,7 +65,7 @@ function SharePage() {
         navigate({ to: "/", replace: true });
         return;
       }
-      sharedIntake.set(payload);
+      payloadRef.current = payload;
       create.mutate({ expiry: DEFAULT_EXPIRY });
     })();
     // create/navigate are stable for this one-shot; deps intentionally empty.
