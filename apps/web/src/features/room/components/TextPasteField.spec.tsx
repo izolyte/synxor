@@ -17,6 +17,19 @@ suite("TextPasteField", () => {
     expect(rtlScreen.getByRole("textbox", { name: "Text or link to send" })).toHaveValue("");
   });
 
+  test("opens pre-filled from initialText and sends it", async () => {
+    const onSend = vi.fn();
+    const screen = renderComponent(
+      <TextPasteField onSend={onSend} initialText={"shared link\nhttps://example.com"} />,
+    );
+
+    expect(rtlScreen.getByRole("textbox", { name: "Text or link to send" })).toHaveValue(
+      "shared link\nhttps://example.com",
+    );
+    await screen.find({ role: "button", name: "Send" }).click();
+    expect(onSend).toHaveBeenCalledWith("shared link\nhttps://example.com");
+  });
+
   test("Enter sends and clears the field", async () => {
     const onSend = vi.fn();
     const screen = renderComponent(<TextPasteField onSend={onSend} />);

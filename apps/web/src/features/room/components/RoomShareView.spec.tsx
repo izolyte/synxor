@@ -14,6 +14,7 @@ import { suite, test } from "~test/kit";
 import { selectors } from "~test/app";
 import { DAY, HOUR, MINUTE } from "~/shared/constants/time";
 import { RoomShareView } from "~/features/room/components/RoomShareView";
+import { sharedIntake } from "~/features/room/services/shared-intake.service";
 import { TransferEvent, type TransferProgressPayload } from "~/features/room/constants/transfer";
 import { RoomEvent } from "~/features/room/constants/room-events";
 import type { Uploader } from "~/features/room/hooks/useFileUploads";
@@ -121,6 +122,19 @@ suite("RoomShareView", () => {
       <RoomShareView roomCode="ABC123" expiresAt={undefined} role="sender" />,
     );
     await screen.find(selectors.transfer.compose).shouldBeVisible();
+  });
+
+  test("a PWA share opens the composer pre-filled and queues its files", async () => {
+    sharedIntake.set({ text: "shared note\nhttps://x.dev", files: [new File(["hi"], "doc.pdf")] });
+    const screen = renderComponent(
+      <RoomShareView roomCode="ABC123" expiresAt={undefined} role="sender" />,
+    );
+
+    await screen.find(selectors.transfer.compose).shouldBeVisible();
+    expect(rtlScreen.getByRole("textbox", { name: "Text or link to send" })).toHaveValue(
+      "shared note\nhttps://x.dev",
+    );
+    await screen.find({ text: "doc.pdf" }).shouldBeVisible();
   });
 
   test("a Receiver gets the composer too", async () => {

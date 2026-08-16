@@ -20,6 +20,7 @@ export function TextPasteField({
   onAttach,
   disabled = false,
   placeholder = "Message, paste a link, or drop a file…",
+  initialText = "",
   onComposing,
   onComposingStop,
 }: {
@@ -29,12 +30,14 @@ export function TextPasteField({
   disabled?: boolean;
   /** Prompt text; the waiting room swaps in an invite-flavoured line. */
   placeholder?: string;
+  /** Seeds the field on mount — a PWA share opens the composer pre-filled. */
+  initialText?: string;
   /** Called on each edit, to drive the ephemeral typing signal. */
   onComposing?: () => void;
   /** Called on send, to retract the typing signal at once. */
   onComposingStop?: () => void;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const tooLong = text.length > MAX_TEXT_PAYLOAD_CHARS;
   const canSend = !disabled && text.trim().length > 0 && !tooLong;
   const errorId = "text-paste-error";

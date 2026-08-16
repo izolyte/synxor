@@ -64,6 +64,12 @@ suite("DropZone", () => {
     await screen.find({ text: "2 KB" }).shouldBeVisible();
   });
 
+  test("queues initialFiles on mount (a PWA share drop)", async () => {
+    const screen = renderComponent(<DropZone initialFiles={[file("shared.pdf", 2048)]} />);
+
+    await screen.find({ text: "shared.pdf" }).shouldBeVisible();
+  });
+
   test("shows drag-over state while a drag is over the zone, clears on leave", async () => {
     const screen = renderComponent(<DropZone />);
     const zone = screen.find({ testId: "drop-zone" });

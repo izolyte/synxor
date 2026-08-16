@@ -42,6 +42,21 @@ export class RoomSessionService {
     this.storage.setItem(this.keyFor(roomCode), JSON.stringify(session));
   }
 
+  /**
+   * Stores a session for a Room this tab just created — the Sender role with
+   * createdAt stamped now. createdAt pairs with expiresAt to give the lifespan the
+   * approaching-Expiry warning scales to; the server set expiresAt moments ago, so
+   * "now" is near enough. Used by both create paths (the landing and a PWA share).
+   */
+  storeNewSender(roomCode: string, token: string, expiresAt: string): void {
+    this.store(roomCode, {
+      token,
+      expiresAt,
+      createdAt: new Date().toISOString(),
+      role: "sender",
+    });
+  }
+
   /** Reads the stored Room session for a Room Code, or null if none is held. */
   get(roomCode: string): RoomSession | null {
     const raw = this.storage.getItem(this.keyFor(roomCode));
