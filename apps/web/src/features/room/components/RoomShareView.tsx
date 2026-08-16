@@ -163,8 +163,13 @@ export function RoomShareView({
         <h1 className="sr-only">Room ready</h1>
 
         {/* The glassy header bar: brand mark, the Room Code + status, the countdown
-            pill, the presence cluster, and the overflow menu. */}
-        <header className="sticky top-0 z-[var(--z-sticky)] flex items-center gap-2.5 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--color-background)_74%,transparent)] px-3 py-2.5 backdrop-blur-[14px] backdrop-saturate-150">
+            pill, the presence cluster, and the overflow menu.
+
+            Below ~46rem the centered content bar goes full-bleed, so its right edge
+            meets the viewport — where the global fixed ThemeToggle lives. Reserve the
+            toggle's footprint here so the overflow kebab never sits under it and stays
+            tappable (the Sender's Delete Room hangs off it). */}
+        <header className="sticky top-0 z-[var(--z-sticky)] flex items-center gap-2.5 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--color-background)_74%,transparent)] py-2.5 pr-3 pl-3 backdrop-blur-[14px] backdrop-saturate-150 max-[46rem]:pr-16">
           <RoomBrandMark />
           <div className="flex min-w-0 flex-col leading-tight">
             {/* While alone the big Code owns the share surface below, so the bar
