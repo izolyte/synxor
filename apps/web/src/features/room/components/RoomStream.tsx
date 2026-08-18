@@ -55,7 +55,7 @@ export function RoomStream({
   }
 
   return (
-    <section aria-label="Room stream" className="flex-1 overflow-y-auto px-3">
+    <section aria-label="Room stream" className="min-h-0 flex-1 overflow-y-auto px-3">
       <ul role="list" className="flex flex-col gap-3 py-3">
         {rows.map((row, i) => {
           const newDay = i === 0 || startOfDay(row.receivedAt) !== startOfDay(rows[i - 1].receivedAt);

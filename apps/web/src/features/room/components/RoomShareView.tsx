@@ -164,7 +164,7 @@ export function RoomShareView({
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <main className="mx-auto flex min-h-dvh w-full max-w-[var(--width-content)] flex-col">
+      <main className="mx-auto flex h-dvh w-full max-w-[var(--width-content)] flex-col">
         {/* The page's heading for the document outline; the visible chrome is the
             glass bar below, whose code + status carry the same information. */}
         <h1 className="sr-only">Room ready</h1>
